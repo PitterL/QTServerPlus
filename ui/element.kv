@@ -1,0 +1,58 @@
+
+<WidgetRootElement>:
+    tab_pos: 'left_top'
+    tab_width: 30
+    tab_height: 20
+    size_hint: 0.5, 0.5
+    pos_hint: {'center_x': .5, 'center_y': .5}
+    #pos_hint: {'left': 1, 'top': 1}
+    do_default_tab: False
+
+###:import Window kivy.core.window.Window
+#:import OpacityScrollEffect kivy.effects.opacityscroll.OpacityScrollEffect
+<WidgetPageElement>:
+    canvas.after:
+        Color:
+            rgba: 0.8, 1, 0.7, 0.5
+        Rectangle:
+            # self here refers to the widget i.e BoxLayout
+            pos: self.pos
+            size: self.size
+    ScrollView:
+        effect_cls:OpacityScrollEffect
+        BoxLayout:
+            id: rows
+            orientation:'vertical'
+            height: self.minimum_height
+            #size: self.minimum_size
+
+<WidgetRowElement>:
+
+<WidgetFieldElement>:
+    orientation:'vertical'
+    WidgetFieldElementLabel:
+        id: name
+        #bold: True
+        outline_width: 1
+        outline_color: 0.7, 0.8, 0.3, 0.5
+        canvas.before:
+            Color:
+                rgba: 1, 1, 0, 0.7
+            Rectangle:
+                # self here refers to the widget i.e BoxLayout
+                pos: self.pos
+                size: self.size
+
+    WidgetFieldElementLabel:
+        id: value
+        valign: 'top'
+        canvas.before:
+            Color:
+                rgba: 1, 1, 0.7, 0.5
+            Rectangle:
+                # self here refers to the widget i.e BoxLayout
+                pos: self.pos
+                size: self.size
+
+<WidgetFieldElementLabel>:
+    max_lines: 1
