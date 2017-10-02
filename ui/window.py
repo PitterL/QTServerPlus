@@ -9,6 +9,10 @@ from server.devinfo import Page
 from tools.mem import ChipMemoryMap
 from ui.element import WidgetRootElement, WidgetPageElement
 
+class WinError(Exception):
+    "Message error exception class type"
+    pass
+
 class DeviceWindow(WidgetRootElement):
     CMD_STACK_DEPTH = 1
 
@@ -58,7 +62,7 @@ class DeviceWindow(WidgetRootElement):
 
     def prepare_command(self, msg):
         if len(self.cmd_list) >= self.CMD_STACK_DEPTH:
-            UiError("command still in process {}", self.cmd_list)
+            WinError("command still in process {}", self.cmd_list)
             self.cmd_list.pop()
 
         self.cmd_list.append(msg)
@@ -120,7 +124,9 @@ class DeviceWindow(WidgetRootElement):
 
         page_id = page.id()
         if page_id == Page.ID_INFORMATION:
-            pass
+            kwargs = {'page_id': Page.OBJECT_TABLE, 'discard': False}
+            command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
+            self.prepare_command(command)
         elif page_id == Page.OBJECT_TABLE:
             pass
         #if page_id not in self.page_tabs.keys():

@@ -251,7 +251,7 @@ class Hid_Device(PhyDevice):
             return True
 
     def handle_hid_read_message(self, cmd, msg):
-        print("handle_hid_read_message")
+        #print("handle_hid_read_message")
         type = cmd.parent_type()
         seq = cmd.seq()  # to parent seq
         seq.pop()
@@ -261,7 +261,7 @@ class Hid_Device(PhyDevice):
 
         size = value[0]
         if size == cmd_data[2]:
-            DeviceMessage(type, self.id(), seq, value=value[1:size + 1],
+            DeviceMessage(type, self.id(), seq, value=value[1: size + 1],
                     pipe=self.logic_pipe()).send()
             return True
 
@@ -336,7 +336,7 @@ class Hid_Device(PhyDevice):
 
     def send_command(self):
         pending = []
-        print("{} send command (has {} cmd in list)".format(self.__class__.__name__, len(self.hid_cmd)))
+        #print("{} send command (has {} cmd in list)".format(self.__class__.__name__, len(self.hid_cmd)))
         for cmd in self.hid_cmd:
             if cmd.status() == Message.SEND:
                 pending.append(cmd)
@@ -387,26 +387,26 @@ class Hid_Device(PhyDevice):
         all_pipes = [self.logic_pipe(), self.pipe_hid_recv]
         close_handle = False
         while not close_handle:
-            try:
-                for r in wait(all_pipes, timeout=self.poll_interval()):
-                    if r:
-                        msg = r.recv()
-                        print("Process<{}> get message: {}".format(self.__class__.__name__, msg))
+            #try:
+            for r in wait(all_pipes, timeout=self.poll_interval()):
+                if r:
+                    msg = r.recv()
+                    print("Process<{}> get message: {}".format(self.__class__.__name__, msg))
 
-                        location = msg.loc()
-                        if location == HidMessage.HID_DEVICE:
-                            self.handle_hid_message(msg)
-                        elif location == HidMessage.SERVER:
-                            self.handle_bus_command(msg)
-                        else:
-                            pass
+                    location = msg.loc()
+                    if location == HidMessage.HID_DEVICE:
+                        self.handle_hid_message(msg)
+                    elif location == HidMessage.SERVER:
+                        self.handle_bus_command(msg)
+                    else:
+                        pass
 
-                    self.send_command()
-            except EOFError:
-                print("Process EOF: {}".format(self.__class__.__name__))
-                close_handle = True
-            except:
-                print("Process unexpected error: {}".format(self.__class__.__name__))
+                self.send_command()
+            # except EOFError:
+            #     print("Process EOF: {}".format(self.__class__.__name__))
+            #     close_handle = True
+            # except:
+            #     print("Process unexpected error: {}".format(self.__class__.__name__))
 
         self.close_dev()
         self.pipe_hid_event.close()

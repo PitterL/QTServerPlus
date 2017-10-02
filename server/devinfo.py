@@ -230,15 +230,17 @@ class MemMapStructure(object):
     def page_parse(self, page_id):
 
         if not self.has_page(page_id):
+            print("{} page {} not exist".format(self.__class__.__name__, page_id))
             return
 
         page = self.get_page(page_id)
         if not page.buffer_data_valid():
+            print("{} page {} data length {}, not ready".format(self.__class__.__name__, page_id, page.data_length()))
             return
 
         data = page.buf()
         if page_id == Page.ID_INFORMATION:
-            id_infomation = IdInformation(*struct.unpack("B" * ctypes.sizeof(IdInformation), data))
+            id_infomation = IdInformation(*struct.unpack_from("B" * ctypes.sizeof(IdInformation), data))
             page.set_info(id_infomation)
             offset = page.addr() + page.size()
             length = id_infomation.object_num * ctypes.sizeof(ObjectTableElement)
@@ -248,20 +250,21 @@ class MemMapStructure(object):
             page_list={'id':self.get_page(Page.ID_INFORMATION),
                        'obj':self.get_page(Page.OBJECT_TABLE)}
 
-            if all(page_list.values()):
+            if not all(page_list.values()):
+                print("{} page value empty".format(self.__class__.__name__))
                 return
 
-            e_size = ctype.sizof(ObjectTableElement)
+            esize = ctypes.sizeof(ObjectTableElement)
             offset = page.addr() + page.size()
             object_tables = {}
             for n in range(page_list['id'].get_info().object_num):
-                element = ObjectTableElement(struct.unpack("<BHBBB", data[n * esize: (n + 1) * esize]))
+                #print(self.__class__.__name__, data[n * esize: (n + 1) * esize])
+                element = ObjectTableElement(*struct.unpack_from("<BHBBB", data[n * esize: (n + 1) * esize]))
                 #self.object_table[element.type] = element
                 for inst in range(element.instances_minus_one + 1):
-                    object_tables[page_id] = element
-
-                    page_id = (element.type, inst)
-                    page = self.create_page(page_id, element.size_minus_one + 1, offset, element)
+                    page_id_new = (element.type, inst)
+                    object_tables[page_id_new] = element
+                    self.create_page(page_id_new, element.size_minus_one + 1, offset)
                     offset += element.size_minus_one + 1
             page_list['obj'].set_info(object_tables)
             result = self.check_info_crc(page_list)

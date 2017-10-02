@@ -1,11 +1,9 @@
-
 <WidgetRootElement>:
     tab_pos: 'left_top'
-    tab_width: 30
-    tab_height: 20
-    size_hint: 0.5, 0.5
+    tab_width: 50
+    tab_height: 30
+    size_hint: 0.5, 1
     pos_hint: {'center_x': .5, 'center_y': .5}
-    #pos_hint: {'left': 1, 'top': 1}
     do_default_tab: False
 
 ###:import Window kivy.core.window.Window
@@ -23,36 +21,47 @@
         BoxLayout:
             id: rows
             orientation:'vertical'
-            height: self.minimum_height
+            size_hint_y:None
             #size: self.minimum_size
+            height: self.minimum_height
 
 <WidgetRowElement>:
+    #orientation: 'lr-tb'
+    #orientation: 'horizontal'
+    size_hint_y: None
+    size: 0, 35
 
 <WidgetFieldElement>:
     orientation:'vertical'
-    WidgetFieldElementLabel:
-        id: name
-        #bold: True
-        outline_width: 1
-        outline_color: 0.7, 0.8, 0.3, 0.5
-        canvas.before:
-            Color:
-                rgba: 1, 1, 0, 0.7
-            Rectangle:
-                # self here refers to the widget i.e BoxLayout
-                pos: self.pos
-                size: self.size
 
-    WidgetFieldElementLabel:
-        id: value
-        valign: 'top'
-        canvas.before:
-            Color:
-                rgba: 1, 1, 0.7, 0.5
-            Rectangle:
-                # self here refers to the widget i.e BoxLayout
-                pos: self.pos
-                size: self.size
+<WidgetFieldElementBaseLabel>:
+    #max_lines: 1
+    #strip:True
+    text_size: self.size
+    halign: 'center'
 
-<WidgetFieldElementLabel>:
-    max_lines: 1
+<WidgetFieldElementName>:
+    id: name
+    valign: 'top'
+    #bold: True
+    outline_width: 1
+    outline_color: 0.7, 0.8, 0.3, 0.5
+    canvas.before:
+        Color:
+            rgba: 1, 1, 0, 0.7
+        Rectangle:
+            # self here refers to the widget i.e BoxLayout
+            pos: self.pos
+            size: self.size
+
+<WidgetFieldElementValue>:
+    id: value
+    valign: 'middle'
+    #max_lines: 1
+    canvas.before:
+        Color:
+            rgba: 1, 1, 0.7, 0.5
+        Rectangle:
+            # self here refers to the widget i.e BoxLayout
+            pos: self.pos
+            size: self.size

@@ -1,4 +1,9 @@
-from server.devinfo import Page
+from collections import OrderedDict
+import struct
+import array
+import ctypes
+
+from server.devinfo import Page, ObjectTableElement
 
 class RowElement(object):
     RSV_NAME = ('rsv', 'reserved')
@@ -17,10 +22,10 @@ class RowElement(object):
             return self.__str__()
 
     def __init__(self, *ele_t, **ele_d):
-        self.fields = {}
+        self.fields = OrderedDict()
         self.seq_rsv = 0
         self.pos = 0
-        self.i = 0
+        self.size = self.MAX_SIZE / 8
 
         for n, v in ele_t:
             self.add_field(n, v)
@@ -46,14 +51,14 @@ class RowElement(object):
         if self.pos > RowElement.MAX_SIZE:
             raise Exception("pos{} out of mem".format(self.pos))
 
-    def full(self):
-        return self.pos == RowElement.MAX_SIZE
+    #def full(self):
+    #    return self.pos == RowElement.MAX_SIZE
 
     def set_field(self, name, val):
         if name in self.fields.keys():
             field = self.fields[name]
             max_value = (1 << field.width) - 1
-            if val < max_value:
+            if val > max_value:
                 raise ElemError("Filed {} width {} bit, value{} over max".format(name, field.width, val))
 
             field.value = val
@@ -62,6 +67,15 @@ class RowElement(object):
         #print(self.__class__.__name__, name, self.fields.keys(), name in self.fields.keys())
         if name in self.fields.keys():
             return self.fields[name].value
+
+    def get_field_by_idx(self, idx):
+        #print(self.__class__.__name__, "get idx {}, ({})".format(idx, self.fields))
+        if idx < len(self.fields.values()):
+            field = list(self.fields.values())[idx]
+            return field.value
+
+    def value_size(self):
+        return self.size
 
     def set_value(self, val):
         for field in self.fields.values():
@@ -78,11 +92,11 @@ class RowElement(object):
 
 class PageElementMmap(object):
 
-    def __init__(self, id, mmap, values=None):
-        self.__id = Page.ID_INFORMATION
+    def __init__(self, id, mmap, values, row_elem_type):
+        self.__id = id
         self.all_rows = []
         for mem in mmap:
-            r = RowElement(*mem)
+            r = row_elem_type(*mem)
             self.all_rows.append(r)
 
         if values:
@@ -91,40 +105,66 @@ class PageElementMmap(object):
     def id(self):
         return self.__id
 
-    def set_values(self, values):
-        if len(self.all_rows) != len(values):
-            print("{} set_values len mismatch:\n{}\n{}".format(self.__class__.__name__, self.all_rows, values))
+    def active(self):
+        return isinstance(self.id(), tuple)
 
+    def set_values(self, values):
         for i, row_elem in enumerate(self.all_rows):
-            if i >= len(values):
+            size = row_elem.value_size()
+            if size * (i + 1) > len(values):
+                print("{} set_values length {} {} over {}".format(self.__class__.__name__, i, size, len(values)))
                 break
 
-            row_elem.set_value(values[i])
+            if size == 1:
+                val = values[i]
+            else:
+                val = values[i * size: (i + 1) * size]
+            row_elem.set_value(val)
 
     def raw_values(self):
-        values = []
+        values = array.array('B', [])
         for row_elem in self.all_rows:
-            values.append(row_elem.get_value())
-
+            val = row_elem.get_value()
+            if isinstance(val, type(values)):
+                values.extend(val)
+            else:
+                values.append(val)
         return values
 
     def select(self, row_idx, field_name=None):
         if row_idx < len(self.all_rows):
             row_elem = self.all_rows[row_idx]
 
-            if not field_name:
+            if field_name is None:
                 return row_elem.get_value()
             else:
                 return row_elem.get_field(field_name)
 
+    def select_idx(self, row_idx, col_idx=None):
+        if row_idx < len(self.all_rows):
+            row_elem = self.all_rows[row_idx]
+
+            #print(self.__class__.__name__, row_elem)
+            if col_idx is None:
+                return row_elem.get_value()
+            else:
+                return row_elem.get_field_by_idx(col_idx)
+
+    def search(self, field_name):
+        for row_elem in self.all_rows:
+            value = row_elem.get_field(field_name)
+            if value is not None:
+                return value
+
     def __iter__(self):
         return iter(self.all_rows)
 
-class PageMem(PageElementMmap):
-    def __init__(self, id, mmap, values=None):
-        super(PageMem, self).__init__(id, mmap, values)
+#class PageMem(PageElementMmap):
 
-class Page0Mem(PageMem):
+#    def __init__(self, id, mmap, values=None):
+#        super(PageMem, self).__init__(id, mmap, values)
+
+class Page0Mem(PageElementMmap):
     PAGE_ID = Page.ID_INFORMATION
     Mmap = (
         (("familiy_id", 8),),
@@ -140,7 +180,107 @@ class Page0Mem(PageMem):
     )
 
     def __init__(self, values=None):
-        super(Page0Mem, self).__init__(self.PAGE_ID, self.Mmap, values)
+        super(Page0Mem, self).__init__(self.PAGE_ID, self.Mmap, values, RowElement)
+
+class RowElementByte(object):
+
+    class ByteField(object):
+        def __init__(self, start, width, c_type):
+            self.start = start
+            self.width = width
+            self.c_type = c_type
+            self.value = 0
+
+        def __str__(self):
+            return "{}({s}, {w}, {v}, {c})".format(self.__class__.__name__, s=self.start, w=self.width, v=hex(self.value), c=self.c_type)
+
+        def __repr__(self):
+            return self.__str__()
+
+    def __init__(self, *ele_t):
+        self.fields = OrderedDict()
+        self.pos = 0
+        self.size = 0
+
+        for elem in ele_t:
+            self.add_field(*elem)
+            self.size += elem[1]
+
+    def __str__(self):
+        return str(self.fields)
+
+    def __repr__(self):
+        return super(RowElementByte, self).__repr__() + '(' + self.__str__() + ')'
+
+    def add_field(self, name, width, c_type):
+        if name not in self.fields.keys():
+            self.fields[name] = RowElementByte.ByteField(self.pos, width, c_type)
+            self.pos += width
+
+    #    if self.pos > self.MAX_SIZE:
+    #        raise Exception("pos{} out of mem".format(self.pos))
+
+    #def full(self):
+    #    return self.pos == self.MAX_SIZE
+
+    def set_field(self, name, val):
+        if name in self.fields.keys():
+            field = self.fields[name]
+            max_value = (1 << (field.width + 8)) - 1
+            if val > max_value:
+                raise ElemError("Filed {} width {} bit, value{} over max".format(name, field.width, val))
+
+            field.value = val
+
+    def get_field(self, name):
+        if name in self.fields.keys():
+            return self.fields[name].value
+
+    def get_field_by_idx(self, idx):
+        #print(self.__class__.__name__, "get idx {}, ({})".format(idx, self.fields))
+        if idx < len(self.fields.values()):
+            field = list(self.fields.values())[idx]
+            return field.value
+
+    def value_size(self):
+        return self.size
+
+    def set_value(self, t_val):
+        for field in self.fields.values():
+            if field.start + field.width > len(t_val):
+                break
+
+            field.value = struct.unpack(field.c_type, t_val[field.start: field.start + field.width])[0]
+
+    def get_value(self):
+        t_val = []
+        print(self.__class__.__name__, self.fields)
+        for field in self.fields.values():
+            t_val.extend(struct.pack('<' + field.c_type, field.value))
+
+        return array.array('B', t_val)
+
+    def __iter__(self):
+        return iter(tuple(self.fields.items()))
+
+class Page1Mem(PageElementMmap):
+    PAGE_ID = Page.OBJECT_TABLE
+    Mmap = (
+        (("type", 1, 'B'), ("start_address", 2, 'H'), ("size_minus_one", 1, 'B'), ("instances_minus_one", 1, 'B'), ("num_report_ids", 1, 'B'),),
+    )
+
+    def __init__(self, object_num, values=None):
+        super(Page1Mem, self).__init__(self.PAGE_ID, self.Mmap * object_num, values, RowElementByte)
+
+class Page2Mem(PageElementMmap):
+
+    def __init__(self, page_id, size, values=None):
+        desc = self.load_page_desc(size)
+        super(Page2Mem, self).__init__(page_id, desc, values, RowElement)
+
+    def load_page_desc(self, size):
+        desc = ((('TBD', 8),),) * size
+        return desc
 
 class PagesMemoryMap(object):
 
@@ -151,12 +291,42 @@ class PagesMemoryMap(object):
         mmem = Page0Mem(chip_id)
         self.mmap_table[mmem.id()] = mmem
 
+        object_num = mmem.search('object_num')
+        if object_num:
+            mmem = Page1Mem(object_num)
+            self.mmap_table[mmem.id()] = mmem
+
     def unload(self):
         self.mmap_table.clear()
 
-    def get_mmap(self, page_id):
-        if page_id in self.mmap_table.keys():
-            return self.mmap_table[page_id]
+    def get_mmap(self, page_id=None):
+
+        if page_id is not None:
+            if page_id in self.mmap_table.keys():
+                return self.mmap_table[page_id]
+        else:
+            return self.mmap_table
+
+    def create_default_mmap_pages(self):
+        page0_mmap = self.get_mmap(Page.ID_INFORMATION)
+        if not page0_mmap:
+            return
+
+        page1_mmap = self.get_mmap(Page.OBJECT_TABLE)
+        if not page1_mmap:
+            return
+
+        esize = ctypes.sizeof(ObjectTableElement)
+        object_num = page0_mmap.search('object_num')
+        if object_num:
+            data = page1_mmap.raw_values()
+            for n in range(object_num):
+                element = ObjectTableElement(*struct.unpack_from("<BHBBB", data[n * esize: (n + 1) * esize]))
+                for inst in range(element.instances_minus_one + 1):
+                    page_id = (element.type, inst)
+                    size = element.size_minus_one + 1
+                    mmem = Page2Mem(page_id, size)
+                    self.mmap_table[mmem.id()] = mmem
 
 class ChipMemoryMap(object):
     CHIP_TABLE = {}

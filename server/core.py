@@ -87,8 +87,8 @@ class LogicDevice(Mm):
             self.prepare_message(message)
 
         else:
-            command = ServerMessage(Message.CMD_DEVICE_BLOCK_READ, self.next_seq(Message.seq_root()),
-                                    start=cmd_addr + data_size, length=cmd_size - data_size)
+            command = ServerMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(Message.seq_root()),
+                                    addr=cmd_addr + data_size, size=cmd_size - data_size, page_id=cmd_page_id)
             self.prepare_command(command)
 
     def handle_nak_msg(self, seq, data=None):
@@ -266,7 +266,7 @@ class QTouchserver(object):
         id = msg.id()
         seq = msg.seq()
 
-        print("handle_bus_message")
+        #print("handle_bus_message")
 
         #default bus pipe
         if type == Message.MSG_DEVICE_ATTACH:

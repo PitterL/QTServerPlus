@@ -15,6 +15,10 @@ from multiprocessing import Pipe
 from server.message import Message
 from ui.window import DeviceWindow
 
+class UiError(Exception):
+    "Message error exception class type"
+    pass
+
 class MainScreen(Screen):
     "Main Screen"
     hue = NumericProperty(0)
