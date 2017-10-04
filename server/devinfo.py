@@ -3,6 +3,8 @@ from ctypes.wintypes import BYTE, WORD
 import array
 import struct
 
+UBYTE = ctypes.c_ubyte
+
 class MemError(Exception):
     "Message error exception class type"
     pass
@@ -11,13 +13,13 @@ class IdInformation(ctypes.Structure):
     """DEV_BROADCAST_DEVICEINTERFACE ctypes structure wrapper"""
     _fields_ = [
         # size of the members plus the actual length of the dbcc_name string
-        ("familiy_id", BYTE),
-        ("variant_id", BYTE),
-        ("version", BYTE),
-        ("build", BYTE),
-        ("maxtrix_xsize", BYTE),
-        ("maxtrix_ysize", BYTE),
-        ("object_num", BYTE),
+        ("familiy_id", UBYTE),
+        ("variant_id", UBYTE),
+        ("version", UBYTE),
+        ("build", UBYTE),
+        ("maxtrix_xsize", UBYTE),
+        ("maxtrix_ysize", UBYTE),
+        ("object_num", UBYTE),
     ]
     _pack_ = 1
 
@@ -25,11 +27,11 @@ class ObjectTableElement(ctypes.Structure):
     """DEV_BROADCAST_DEVICEINTERFACE ctypes structure wrapper"""
     _fields_ = [
         # size of the members plus the actual length of the dbcc_name string
-        ("type", BYTE),
+        ("type", UBYTE),
         ("start_address", WORD),
-        ("size_minus_one", BYTE),
-        ("instances_minus_one", BYTE),
-        ("num_report_ids", BYTE),
+        ("size_minus_one", UBYTE),
+        ("instances_minus_one", UBYTE),
+        ("num_report_ids", UBYTE),
     ]
     _pack_ = 1
 

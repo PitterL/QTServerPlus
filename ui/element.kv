@@ -2,13 +2,14 @@
     tab_pos: 'left_top'
     tab_width: 50
     tab_height: 30
-    size_hint: 0.5, 1
+    size_hint: 0.5, 0.5
     pos_hint: {'center_x': .5, 'center_y': .5}
     do_default_tab: False
 
-###:import Window kivy.core.window.Window
 #:import OpacityScrollEffect kivy.effects.opacityscroll.OpacityScrollEffect
+
 <WidgetPageElement>:
+    #height: self.minimum_height
     canvas.after:
         Color:
             rgba: 0.8, 1, 0.7, 0.5
@@ -16,31 +17,59 @@
             # self here refers to the widget i.e BoxLayout
             pos: self.pos
             size: self.size
-    ScrollView:
-        effect_cls:OpacityScrollEffect
-        BoxLayout:
-            id: rows
-            orientation:'vertical'
-            size_hint_y:None
-            #size: self.minimum_size
-            height: self.minimum_height
+    BoxLayout:
+        id: content
+        orientation:'vertical'
+
+<WidgetPageContentBaseElement>:
+    effect_cls:OpacityScrollEffect
+    BoxLayout:
+        id: content
+        orientation:'vertical'
+        size_hint_y:None
+        height: self.minimum_height
+
+<WidgetPageTitleElement>
+    size_hint_y:None
+    height: 35
+
+<WidgetPageRowsElement>
 
 <WidgetRowElement>:
-    #orientation: 'lr-tb'
-    #orientation: 'horizontal'
     size_hint_y: None
-    size: 0, 35
+    height: 35
+    orientation: 'horizontal'
+
+<WidgetRowIndexElement>
+    size_hint: None, None
+    width: 15
+    height: 35
+    canvas.before:
+        Color:
+            rgba: 1, 1, 0, 0.7
+        Rectangle:
+            # self here refers to the widget i.e BoxLayout
+            pos: self.pos
+            size: self.size
+    Label:
+        id:content
+
+
+<WidgetRowDataElement>
+    size_hint_y: None
+    height: 35
+    orientation: 'horizontal'
 
 <WidgetFieldElement>:
     orientation:'vertical'
 
-<WidgetFieldElementBaseLabel>:
+<WidgetFieldLabelBase>:
     #max_lines: 1
     #strip:True
     text_size: self.size
     halign: 'center'
 
-<WidgetFieldElementName>:
+<WidgetFieldLabelName>:
     id: name
     valign: 'top'
     #bold: True
@@ -54,7 +83,7 @@
             pos: self.pos
             size: self.size
 
-<WidgetFieldElementValue>:
+<WidgetFieldLabelValue>:
     id: value
     valign: 'middle'
     #max_lines: 1

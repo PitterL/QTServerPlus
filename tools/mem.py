@@ -105,8 +105,11 @@ class PageElementMmap(object):
     def id(self):
         return self.__id
 
-    def active(self):
-        return isinstance(self.id(), tuple)
+    def parent_inst(self):
+        return 0
+
+    def row(self, row_idx):
+        return self.all_rows[row_idx]
 
     def set_values(self, values):
         for i, row_elem in enumerate(self.all_rows):
@@ -157,12 +160,8 @@ class PageElementMmap(object):
                 return value
 
     def __iter__(self):
+        #print(self.__class__.__name__, self.all_rows)
         return iter(self.all_rows)
-
-#class PageMem(PageElementMmap):
-
-#    def __init__(self, id, mmap, values=None):
-#        super(PageMem, self).__init__(id, mmap, values)
 
 class Page0Mem(PageElementMmap):
     PAGE_ID = Page.ID_INFORMATION
@@ -192,7 +191,7 @@ class RowElementByte(object):
             self.value = 0
 
         def __str__(self):
-            return "{}({s}, {w}, {v}, {c})".format(self.__class__.__name__, s=self.start, w=self.width, v=hex(self.value), c=self.c_type)
+            return "{}({s}, {w}, {v}, '{c}')".format(self.__class__.__name__, s=self.start, w=self.width, v=hex(self.value), c=self.c_type)
 
         def __repr__(self):
             return self.__str__()
@@ -250,11 +249,11 @@ class RowElementByte(object):
             if field.start + field.width > len(t_val):
                 break
 
-            field.value = struct.unpack(field.c_type, t_val[field.start: field.start + field.width])[0]
+            field.value = struct.unpack_from(field.c_type, t_val[field.start: field.start + field.width])[0]
 
     def get_value(self):
         t_val = []
-        print(self.__class__.__name__, self.fields)
+        #print(self.__class__.__name__, self.fields)
         for field in self.fields.values():
             t_val.extend(struct.pack('<' + field.c_type, field.value))
 
@@ -274,11 +273,16 @@ class Page1Mem(PageElementMmap):
 
 class Page2Mem(PageElementMmap):
 
-    def __init__(self, page_id, size, values=None):
-        desc = self.load_page_desc(size)
+    def __init__(self, page_id, inst, size, values=None):
+        self.__instance = inst
+        desc = self.load_page_desc(page_id, inst, size)
         super(Page2Mem, self).__init__(page_id, desc, values, RowElement)
 
-    def load_page_desc(self, size):
+    def parent_inst(self):
+        return self.__instance
+
+    def load_page_desc(self, page_id, inst, size):
+        #print(self.__class__.__name__, page_id, inst, size)
         desc = ((('TBD', 8),),) * size
         return desc
 
@@ -322,10 +326,12 @@ class PagesMemoryMap(object):
             data = page1_mmap.raw_values()
             for n in range(object_num):
                 element = ObjectTableElement(*struct.unpack_from("<BHBBB", data[n * esize: (n + 1) * esize]))
-                for inst in range(element.instances_minus_one + 1):
-                    page_id = (element.type, inst)
+                #print(self.__class__.__name__, data[n * esize: (n + 1) * esize])
+                inst = element.instances_minus_one + 1
+                for i in range(inst):
+                    page_id = (element.type, i)
                     size = element.size_minus_one + 1
-                    mmem = Page2Mem(page_id, size)
+                    mmem = Page2Mem(page_id, inst, size)
                     self.mmap_table[mmem.id()] = mmem
 
 class ChipMemoryMap(object):

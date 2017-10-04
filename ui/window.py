@@ -41,24 +41,24 @@ class DeviceWindow(WidgetRootElement):
         self.cmd_seq += 1
         return Token(self.cmd_seq)
 
-    def parse_id_infomation(self, page):
-        self.id_infomation = Mm.IdInformation(struct.unpack("B"*ctypes.sizeof(Mm.IdInformation), data))
+    # def parse_id_infomation(self, page):
+    #     self.id_infomation = Mm.IdInformation(struct.unpack("B"*ctypes.sizeof(Mm.IdInformation), data))
 
-    def parse_object_table(self, data):
-        e_size = ctype.sizof(Mm.ObjectTableElement)
-        for n in range(self.id_infomation.object_num):
-            element = Mm.ObjectTableElement(struct.unpack("<BHBBB", data[n * esize: (n + 1) * esize]))
-            self.object_table[element.type] = element
+    # def parse_object_table(self, data):
+    #     e_size = ctype.sizof(Mm.ObjectTableElement)
+    #     for n in range(self.id_infomation.object_num):
+    #         element = Mm.ObjectTableElement(struct.unpack_from("<BHBBB", data[n * esize: (n + 1) * esize]))
+    #         self.object_table[element.type] = element
 
-    def parse_object_type(self, type, data):
-        if type in self.object_table.keys():
-            #element = self.object_table[type]
-            pass
-
-    def parse_page(self, page):
-        page_id = page.id()
-        if page_id == Page.ID_INFORMATION:
-            self.parse_id_infomation(page)
+    # def parse_object_type(self, type, data):
+    #     if type in self.object_table.keys():
+    #         #element = self.object_table[type]
+    #         pass
+    #
+    # def parse_page(self, page):
+    #     page_id = page.id()
+    #     if page_id == Page.ID_INFORMATION:
+    #         self.parse_id_infomation(page)
 
     def prepare_command(self, msg):
         if len(self.cmd_list) >= self.CMD_STACK_DEPTH:
