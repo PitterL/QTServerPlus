@@ -4,12 +4,19 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.stacklayout import StackLayout
 from kivy.uix.label import Label
 # from kivy.uix.button import Button
-from kivy.uix.behaviors import FocusBehavior
+#from kivy.uix.behaviors import FocusBehavior
 from kivy.graphics import Color, Rectangle
 # from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
-from kivy.uix.scrollview import ScrollView
+#from kivy.uix.scrollview import ScrollView
 
+from kivy.uix.recycleview import RecycleView
+from kivy.uix.recycleview.views import RecycleDataViewBehavior
+#from kivy.uix.label import Label
+from kivy.properties import BooleanProperty
+from kivy.uix.recycleboxlayout import RecycleBoxLayout
+from kivy.uix.behaviors import FocusBehavior
+from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 
 from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem, TabbedPanelHeader
 from server.devinfo import Page
@@ -117,16 +124,17 @@ class WidgetFieldElement(BoxLayout):
     (NAME, VALUE) = range(2)
 
     def __init__(self, **kwargs):
+        #print(self.__class__.__name__, kwargs)
         page_id = kwargs.pop('page_id')
         row_idx =  kwargs.pop('row_idx')
         col_idx = kwargs.pop('col_idx')
-        name= kwargs.pop('name', None)
+        name = kwargs.pop('name', None)
         value = kwargs.pop('value', None)
         skip_name = kwargs.pop('skip_name', False)
         skip_value = kwargs.pop('skip_value', False)
+        layout_kwargs = kwargs.pop('layout_kwargs', dict())
 
-        #print(self.__class__.__name__, kwargs)
-        super(WidgetFieldElement, self).__init__(**kwargs)
+        super(WidgetFieldElement, self).__init__(**layout_kwargs)
 
         if not skip_name:
             text = self.to_field_name(row_idx, col_idx, name)
@@ -160,6 +168,7 @@ class WidgetFieldT1Element(WidgetFieldElement):
     REPORT_ID_TABLE = []
 
     def __init__(self, **kwargs):
+        #print(self.__class__.__name__, kwargs)
         skip_report_id = kwargs.pop('skip_report_id', False)
 
         if not skip_report_id:
@@ -206,23 +215,45 @@ class WidgetRowIndexElement(BoxLayout):
 class WidgetRowDataElement(BoxLayout):
     pass
 
-class WidgetRowElement(BoxLayout):
-    (ELEM_INDEX, ELEM_DATA) = range(2)
+class WidgetRowElement(RecycleDataViewBehavior, BoxLayout):
+    (CHILD_ELEM_INDEX, CHILD_ELEM_DATA) = range(2)
+    ''' Add selection support to the Label '''
+    index = None
+    selected = BooleanProperty(False)
+    selectable = BooleanProperty(True)
 
     def __init__(self, **kwargs):
         #print(self.__class__.__name__, kwargs)
-        self.__page_id = kwargs.pop('page_id')
-        self.__row_idx = kwargs.pop('row_idx')
+        self.__page_id = None
+        self.__row_idx = None
         self.__layout = {}
-        skip_index = kwargs.pop('skip_index', True)
-        super(WidgetRowElement, self).__init__(**kwargs)
+
+        super(WidgetRowElement, self).__init__()
+
+        #if kwargs:
+        #    self.__init2__(**kwargs)
+
+    def __init2__(self, **kwargs):
+        #print(self.__class__.__name__, "__init2__", kwargs)
+        if len(self.__layout):
+            self.clear_layout()
+
+        self.__page_id = kwargs.get('page_id')
+        self.__row_idx = kwargs.get('row_idx')
+        #self.__layout = {}
+        skip_index = kwargs.get('skip_index', True)
+        layout_kwargs = kwargs.get('layout_kwargs', dict())
+        #super(WidgetRowElement, self).__init__(**layout_kwargs)
+        for k, v in layout_kwargs:
+            if hasattr(self, k):
+                setattr(self, k, v)
 
         if not skip_index:
             idx_widget = WidgetRowIndexElement(self.__row_idx)
-            self.add_layout(self.ELEM_INDEX, idx_widget)
+            self.add_layout(self.CHILD_ELEM_INDEX, idx_widget)
 
         data_widget = WidgetRowDataElement()
-        self.add_layout(self.ELEM_DATA, data_widget)
+        self.add_layout(self.CHILD_ELEM_DATA, data_widget)
 
     def page_id(self):
         return self.__page_id
@@ -230,12 +261,17 @@ class WidgetRowElement(BoxLayout):
     def row_id(self):
         return self.__row_idx
 
+    def layout(self, name):
+        return self.__layout.get(name, None)
+
     def add_layout(self, name, widget):
         self.__layout[name] = widget
         self.add_widget(widget)
 
-    def layout(self, name):
-        return self.__layout.get(name, None)
+    def clear_layout(self):
+        #print(self.__class__.__name__, "clear layout", self.__layout)
+        self.__layout.clear()
+        self.clear_widgets()
 
     def add_children_layout(self, name, widget):
         layout = self.layout(name)
@@ -248,13 +284,55 @@ class WidgetRowElement(BoxLayout):
             return layout.children
 
     def create_field_element(self, **kwargs):
+        #print(self.__class__.__name__, kwargs)
         page_id = self.page_id()
         row_idx = self.row_id()
         class_field_elem = kwargs.pop('class_field_elem', WidgetFieldElement)
 
+        #print(class_field_elem, kwargs)
         return class_field_elem(page_id=page_id, row_idx=row_idx, **kwargs)
 
-class WidgetPageContentBaseElement(ScrollView):
+    def refresh_view_attrs(self, rv, index, data):
+        ''' Catch and handle the view changes '''
+        #print(self.__class__.__name__, rv, index, data)
+
+        kwargs = data
+        w_row_kwargs = kwargs.get('w_row_kwargs')
+        w_field_kwargs = kwargs.get('w_field_kwargs')
+        self.__init2__(**w_row_kwargs)
+
+        row_mm = w_row_kwargs.get('row_mm')
+        for j, (name, elem) in enumerate(row_mm):
+            kwargs = dict(col_idx=j, name=name, value=elem.value, **w_field_kwargs)
+            w_field = self.create_field_element(**kwargs)
+            self.add_children_layout(self.CHILD_ELEM_DATA, w_field)
+
+        self.index = index
+
+        #print(self.__class__.__name__, rv.data[index])
+        return super(WidgetRowElement, self).refresh_view_attrs(
+            rv, index, data)
+
+    def on_touch_down(self, touch):
+        ''' Add selection on touch down '''
+        if super(WidgetRowElement, self).on_touch_down(touch):
+            return True
+        if self.collide_point(*touch.pos) and self.selectable:
+            return self.parent.select_with_touch(self.index, touch)
+
+    def apply_selection(self, rv, index, is_selected):
+        ''' Respond to the selection of items in the view. '''
+        self.selected = is_selected
+        # if is_selected:
+        #     print("selection changed to {0}".format(rv.data[index]))
+        # else:
+        #     print("selection removed for {0}".format(rv.data[index]))
+
+class SelectableRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
+                                 RecycleBoxLayout):
+    ''' Adds selection and focus behaviour to the view. '''
+
+class WidgetPageContentBaseElement(RecycleView):
     pass
 
 class WidgetPageTitleElement(WidgetPageContentBaseElement):
@@ -276,6 +354,8 @@ class WidgetPageElement(TabbedPanelItem):
         }
     }
 
+    (PAGE_CHILD_ELEM_TITLE, PAGE_CHILD_ELEM_CONTENT) = ('Title', 'Content')
+
     def __init__(self, page_mm, **kwargs):
         self.__id = page_mm.id()
         self.__layout = {}
@@ -285,11 +365,10 @@ class WidgetPageElement(TabbedPanelItem):
         title = WidgetPageElement.layout_type(self.id(), 'title')
         if title:
             widget = self.create_rows_title_widget(page_mm, name=title)
-            self.add_layout("Title", widget)
+            #self.add_layout("Title", widget)
 
         layout_kwargs = WidgetPageElement.layout_type(self.id())
-        widget = self.create_rows_widget(page_mm, layout_kwargs=layout_kwargs)
-        self.add_layout("Rows", widget)
+        self.create_rows_widget(page_mm, layout_kwargs=layout_kwargs)
 
     def id(self):
         return self.__id
@@ -330,35 +409,75 @@ class WidgetPageElement(TabbedPanelItem):
         text = to_tab_name(page_mm)
         super(WidgetPageElement, self).__init__(text=text, **kwargs)
 
+    # def create_rows_title_widget(self, page_mm, **kwargs):
+    #     rows_title_name = kwargs['name']
+    #     root = WidgetPageTitleElement()
+    #     title_widget = root.ids['content']
+    #     row_mm = page_mm.row(0) #title use first row as element
+    #     w_row = WidgetRowElement(page_id=self.id(), row_idx=-1)
+    #
+    #     for j, name in enumerate(rows_title_name):
+    #         w_field = w_row.create_field_element(col_idx=j, name=name, skip_value=True)
+    #         w_row.add_children_layout(w_row.CHILD_ELEM_DATA, w_field)
+    #
+    #     title_widget.add_widget(w_row)
+    #     return root
+    #
     def create_rows_title_widget(self, page_mm, **kwargs):
         rows_title_name = kwargs['name']
         root = WidgetPageTitleElement()
-        title_widget = root.ids['content']
+        #title_widget = root.ids['content']
         row_mm = page_mm.row(0) #title use first row as element
-        w_row = WidgetRowElement(page_id=self.id(), row_idx=-1)
+        #w_row = WidgetRowElement(page_id=self.id(), row_idx=-1)
 
-        for j, name in enumerate(rows_title_name):
-            w_field = w_row.create_field_element(col_idx=j, name=name, skip_value=True)
-            w_row.add_children_layout(w_row.ELEM_DATA, w_field)
+        # for j, name in enumerate(rows_title_name):
+        #     class_field_kwargs = {'col_idx': j, 'name': name, 'skip_value': True}
+        #     w_field = w_row.create_field_element(class_field_kwargs=class_field_kwargs)
+        #     w_row.add_children_layout(w_row.CHILD_ELEM_DATA, w_field)
+        self.add_layout(self.PAGE_CHILD_ELEM_TITLE, root)
 
-        title_widget.add_widget(w_row)
-        return root
+        data = []
+        row_kwargs = {'w_row_kwargs': dict(page_id=self.id(), row_idx=-1, row_mm=row_mm),
+                        'w_field_kwargs': dict(skip_value=True)}
+        #print(self.__class__.__name__, row_kwargs)
+        data.append(row_kwargs)
+
+        #print(self.__class__.__name__, row_kwargs)
+
+        root.data = data
+
+        #print(self.__class__.__name__, root.data)
+        #title_widget.add_widget(w_row)
+        #root.add_widget(w_row)
+        #return root
 
     def create_rows_widget(self, page_mm, layout_kwargs):
         root = WidgetPageRowsElement()
-        rows_widget = root.ids['content']
+        #root = WidgetPageContentBaseElement()
+        #rows_widget = root.ids['content']
 
         skip_index = layout_kwargs.get('skip_index', True)
         skip_name = layout_kwargs.get('skip_name', False)
         class_field_elem = layout_kwargs.get('class_field_elem')
+        #print(self.__class__.__name__, class_field_elem)
 
+        # for i, row_mm in enumerate(page_mm):
+        #     w_row = WidgetRowElement(page_id=self.id(), row_idx=i, skip_index=skip_index)
+        #     for j, (name, elem) in enumerate(row_mm):
+        #         w_field = w_row.create_field_element(col_idx=j, name=name, value=elem.value, skip_name=skip_name, class_field_elem=class_field_elem)
+        #         w_row.add_children_layout(w_row.CHILD_ELEM_DATA, w_field)
+        #     rows_widget.add_widget(w_row)
+
+        self.add_layout(self.PAGE_CHILD_ELEM_CONTENT, root)
+
+        data = []
         for i, row_mm in enumerate(page_mm):
-            w_row = WidgetRowElement(page_id=self.id(), row_idx=i, skip_index=skip_index)
-            for j, (name, elem) in enumerate(row_mm):
-                w_field = w_row.create_field_element(col_idx=j, name=name, value=elem.value, skip_name=skip_name, class_field_elem=class_field_elem)
-                w_row.add_children_layout(w_row.ELEM_DATA, w_field)
-            rows_widget.add_widget(w_row)
-        return root
+            row_kwargs = {'w_row_kwargs': dict(page_id=self.id(), row_idx=i, skip_index=skip_index, row_mm=row_mm, layout_kwargs=dict()),
+                            'w_field_kwargs': dict(skip_name=skip_name, class_field_elem=class_field_elem)}
+            #print(self.__class__.__name__, row_kwargs)
+            data.append(row_kwargs)
+
+        root.data = data
 
     def do_fresh(self, page_mm):
         if page_mm.id() != self.__id:
@@ -366,18 +485,18 @@ class WidgetPageElement(TabbedPanelItem):
             return
 
         layout = self.layout('Rows')
-        if layout:
-            for w_row in layout.ids['content'].children:    #WidgetRowElement
-                for w_field_elem in w_row.children_layout(w_row.ELEM_DATA):     #WidgetFieldElement
-                    #print(self.__class__.__name__, w_field_elem)
-                    w_field_value = w_field_elem.field_type(WidgetFieldElement.VALUE)   #WidgetFieldElementValue
-
-                    if w_field_value:
-                        value = page_mm.select_idx(*w_field_value.id()) #(row_idx, col_idx)
-                        if value is not None:   #could be zero for value, but not None
-                            w_field_value.text = w_field_elem.to_field_value(w_field_value.row_idx(), w_field_value.col_idx(), value)
-                        else:
-                            print("{} fresh page {}, field '{}' not found".format(self.__class__.__name__, page_mm.id(), w_field_value.id()))
+        # if layout:
+        #     for w_row in layout.ids['content'].children:    #WidgetRowElement
+        #         for w_field_elem in w_row.children_layout(w_row.CHILD_ELEM_DATA):     #WidgetFieldElement
+        #             #print(self.__class__.__name__, w_field_elem)
+        #             w_field_value = w_field_elem.field_type(WidgetFieldElement.VALUE)   #WidgetFieldElementValue
+        #
+        #             if w_field_value:
+        #                 value = page_mm.select_idx(*w_field_value.id()) #(row_idx, col_idx)
+        #                 if value is not None:   #could be zero for value, but not None
+        #                     w_field_value.text = w_field_elem.to_field_value(w_field_value.row_idx(), w_field_value.col_idx(), value)
+        #                 else:
+        #                     print("{} fresh page {}, field '{}' not found".format(self.__class__.__name__, page_mm.id(), w_field_value.id()))
 
 class WidgetRootElement(TabbedPanel):
     def __init__(self, **kwargs):
@@ -424,16 +543,16 @@ if __name__ == '__main__':
             #root.add_widget(head_tabs)
             root = head_tabs
             v_chip_id = array.array('B', [164, 24, 16, 170, 32, 20, 40])
-            #v_chip_id = array.array('B', [164, 24, 16, 170, 32, 20, 3])
+            #v_chip_id = array.array('B', [164, 24, 16, 170, 32, 20, 7, 0x3b, 0x4c, 0x5d])
             chip = ChipMemoryMap.get_chip_mmap(v_chip_id)
 
             page_mmap = chip.get_mmap(Page.ID_INFORMATION)
             w_page = WidgetPageElement(page_mmap)
             head_tabs.add_element(w_page)
             #test upgrade value
-            w_page_check = head_tabs.get_element(Page.ID_INFORMATION)
-            page_mmap.set_values([1,2,3,4,5,6,7, 0xa1, 0xd2, 0xc3])
-            w_page_check.do_fresh(page_mmap)
+            #w_page_check = head_tabs.get_element(Page.ID_INFORMATION)
+            #page_mmap.set_values([1,2,3,4,5,6,7, 0xa1, 0xd2, 0xc3])
+            #w_page_check.do_fresh(page_mmap)
 
             v_block_info = array.array('B',
                   [117, 250, 0, 214, 5, 0, 37, 4, 6, 129, 0, 0, 44, 134, 6, 0, 0, 0, 5, 135, 6, 10, 0, 0, 6, 146, 6, 6,

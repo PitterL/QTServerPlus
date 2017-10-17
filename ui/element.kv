@@ -23,15 +23,25 @@
 
 <WidgetPageContentBaseElement>:
     effect_cls:OpacityScrollEffect
-    BoxLayout:
-        id: content
-        orientation:'vertical'
-        size_hint_y:None
+    viewclass: 'WidgetRowElement'
+
+    SelectableRecycleBoxLayout:
+        default_size: None, dp(56)
+        default_size_hint: 1, None
+        size_hint_y: None
         height: self.minimum_height
+        orientation: 'vertical'
+        multiselect: True
+        touch_multiselect: True
+
+        id: content
+        #orientation:'vertical'
+        #size_hint_y:None
+        #height: self.minimum_height
 
 <WidgetPageTitleElement>
     size_hint_y:None
-    height: 35
+    height: 55
 
 <WidgetPageRowsElement>
 
@@ -39,6 +49,13 @@
     size_hint_y: None
     height: 35
     orientation: 'horizontal'
+    # Draw a background to indicate selection
+    canvas.before:
+        Color:
+            rgba: (.0, 0.9, .1, .3) if self.selected else (0, 0, 0, 1)
+        Rectangle:
+            pos: self.pos
+            size: self.size
 
 <WidgetRowIndexElement>
     size_hint: None, None

@@ -173,9 +173,10 @@ class Page0Mem(PageElementMmap):
         (("maxtrix_xsize", 8),),
         (("maxtrix_ysize", 8),),
         (("object_num", 8),),
-        #(('a', 3), ('b', 2), ('c', 1), ('d', 2)),
-        #(("rsv", 4), ("rsv", 4)),
-        #(('reserved',8),)
+        # test purpose below
+        # (('a', 3), ('b', 2), ('c', 1), ('d', 2)),
+        # (("rsv", 4), ("rsv", 4)),
+        # (('reserved',8),)
     )
 
     def __init__(self, values=None):
@@ -325,8 +326,8 @@ class PagesMemoryMap(object):
         if object_num:
             data = page1_mmap.raw_values()
             for n in range(object_num):
-                element = ObjectTableElement(*struct.unpack_from("<BHBBB", data[n * esize: (n + 1) * esize]))
                 #print(self.__class__.__name__, data[n * esize: (n + 1) * esize])
+                element = ObjectTableElement(*struct.unpack_from("<BHBBB", data[n * esize: (n + 1) * esize]))
                 inst = element.instances_minus_one + 1
                 for i in range(inst):
                     page_id = (element.type, i)
