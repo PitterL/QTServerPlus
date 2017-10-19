@@ -42,11 +42,8 @@ class PhyDevice(object):
     def next_seq(self, token):
         self.cmd_seq += 1
         token.append(self.cmd_seq)
-        print("next seq {}".format(token))
+        print(self.__class__.__name__, "next seq {}".format(token))
         return token
-
-    def logic_pipe(self):
-        return self.pipe_device_to_logic
 
     def logic_pipe(self):
         return self.pipe_device_to_logic

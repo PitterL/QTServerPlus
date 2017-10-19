@@ -24,7 +24,7 @@ class DeviceWindow(WidgetRootElement):
         self.object_table = {}
         #self.widget_root = WidgetRootElement()
         #self.page_widgets = {}
-        self.pages_mmap = None
+        self.chip = None
         #self.object_buf = {}
         print("create {} {} id {}".format(self.__class__.__name__, self.__init__.__name__, self.id()))
 
@@ -85,20 +85,37 @@ class DeviceWindow(WidgetRootElement):
             command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
             self.prepare_command(command)
         else:
-            self.pages_mmap = None
+            self.chip = None
 
     def create_page_element(self, page):
-        if not self.pages_mmap:
+        if not self.chip:
             chip_id = page.buf()
-            self.pages_mmap = ChipMemoryMap.get_chip_mmap(chip_id)
+            self.chip = ChipMemoryMap.get_chip_mmap(chip_id)
 
-        print(self.__class__.__name__, self.create_page_element.__name__, self.pages_mmap)
+        print(self.__class__.__name__, self.chip)
 
-        if self.pages_mmap:
-            page_mm = self.pages_mmap.get_mmap(page.id())
-            w_page = WidgetPageElement(page_mm)
-            self.add_element(w_page)
-            return w_page
+        if not self.chip:
+            return
+
+        page_mm = self.chip.get_mmap(page.id())
+        w_page = WidgetPageElement(page_mm)
+        w_page.bind(on_press=self.on_page_selected)
+        self.add_element(w_page)
+        return w_page
+
+    def create_default_pages_element(self):
+        if not self.chip:
+            return
+
+        self.chip.create_default_mmap_pages()
+        all_page_mmaps = self.chip.get_mmap()
+        for mmap in all_page_mmaps.values():
+            if mmap.parent_inst():
+                widget = self.get_element(mmap.id())
+                if not widget:
+                    w_page = WidgetPageElement(mmap)
+                    w_page.bind(on_press=self.on_page_selected)
+                    self.add_element(w_page)
 
     def distory_page_element(self):
         self.clear_elements()
@@ -110,10 +127,19 @@ class DeviceWindow(WidgetRootElement):
             widget = self.create_page_element(page)
 
         if widget:
-            page_mm = self.pages_mmap.get_mmap(page.id())
+            page_mm = self.chip.get_mmap(page.id())
             if page_mm:
                 page_mm.set_values(page.buf())
                 widget.do_fresh(page_mm)
+
+    def on_page_selected(self, instance):
+        print(instance)
+        page_id = instance.id()
+        page_mm = self.chip.get_mmap(page_id)
+        if not page_mm.valid():
+            kwargs = {'page_id': page_id, 'discard': True}
+            command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
+            self.prepare_command(command)
 
     def handle_page_read_msg(self, page):
 
@@ -128,7 +154,7 @@ class DeviceWindow(WidgetRootElement):
             command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
             self.prepare_command(command)
         elif page_id == Page.OBJECT_TABLE:
-            pass
+            self.create_default_pages_element()
         #if page_id not in self.page_tabs.keys():
         #    tab = PageTab(page)
         #    self.page_tabs[page_id] = tab
@@ -141,15 +167,15 @@ class DeviceWindow(WidgetRootElement):
     def handle_page_write_msg(self, data):
         self.ids["message"] == "Page write: {}".format(data)
 
-    def hand_nak_msg(self):
-        pass
+    def hand_nak_msg(self, msg):
+        print(self.__class__.__name__, "NAK: ", msg)
 
     def handle_message(self, msg):
         type = msg.type()
         seq = msg.seq()
         val = msg.value()
 
-        print("Process<{}> handle message: {}".format(self.__class__.__name__, msg))
+        print("Process<{}> get message: {}".format(self.__class__.__name__, msg))
 
         if type == Message.MSG_DEVICE_ATTACH:
             self.handle_attach_msg(val)
@@ -160,7 +186,7 @@ class DeviceWindow(WidgetRootElement):
         elif type == Message.MSG_DEVICE_PAGE_WRITE:
             self.handle_page_write_msg(val)
         elif type == Message.MSG_DEVICE_NAK:
-            self.hand_nak_msg(seq, val)
+            self.hand_nak_msg(msg)
         else:
             UiError("Unknow Message")
 

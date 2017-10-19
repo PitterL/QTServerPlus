@@ -55,8 +55,10 @@ class Page(object):
         self.__buffer = array.array('B', [])  # copy from cache data if split reading complete
         self.info = information
 
+        print(self.__class__.__name__, self.__str__())
+
     def __str__(self):
-        return "Page {}: addr {start}\tlen {len},\t{data}".format(self.id(), start=self.addr(), len=self.size(), data=self.buf())
+        return "Page {}: addr {start}\tlen {len},\tdata {data}".format(self.id(), start=self.addr(), len=self.size(), data=self.buf())
 
     def __repr__(self):
         return super(Page, self).__repr__() + '(' + self.__str__() + ')'
@@ -183,9 +185,10 @@ class MemMapStructure(object):
             result.append(str(page))
         return '\n'.join(result)
 
-    def create_page(self, page_id, length, offset):
-        if page_id not in self.__pages.keys():
-            self.__pages[page_id] = Page(page_id, length, offset)
+    def create_page(self, page_id, offset, length):
+        if page_id in self.__pages.keys():
+            del self.__pages[page_id]
+        self.__pages[page_id] = Page(page_id, offset, length)
         return self.get_page(page_id)
 
     def has_page(self, page_id):
@@ -246,32 +249,31 @@ class MemMapStructure(object):
             page.set_info(id_infomation)
             offset = page.addr() + page.size()
             length = id_infomation.object_num * ctypes.sizeof(ObjectTableElement)
-            result = self.create_page(Page.OBJECT_TABLE, offset, length)
-
+            self.create_page(Page.OBJECT_TABLE, offset, length)
+            return self.has_page(Page.OBJECT_TABLE)
         elif page_id == Page.OBJECT_TABLE:
-            page_list={'id':self.get_page(Page.ID_INFORMATION),
-                       'obj':self.get_page(Page.OBJECT_TABLE)}
+            page_list = {'id':self.get_page(Page.ID_INFORMATION),
+                        'obj':self.get_page(Page.OBJECT_TABLE)}
 
             if not all(page_list.values()):
                 print("{} page value empty".format(self.__class__.__name__))
                 return
 
             esize = ctypes.sizeof(ObjectTableElement)
-            offset = page.addr() + page.size()
             object_tables = {}
             for n in range(page_list['id'].get_info().object_num):
                 #print(self.__class__.__name__, data[n * esize: (n + 1) * esize])
                 element = ObjectTableElement(*struct.unpack_from("<BHBBB", data[n * esize: (n + 1) * esize]))
-                #self.object_table[element.type] = element
-                for inst in range(element.instances_minus_one + 1):
-                    page_id_new = (element.type, inst)
-                    object_tables[page_id_new] = element
-                    self.create_page(page_id_new, element.size_minus_one + 1, offset)
-                    offset += element.size_minus_one + 1
-            page_list['obj'].set_info(object_tables)
-            result = self.check_info_crc(page_list)
-        else:
-            result = False    #no need parse
+                offset = element.start_address
+                inst = element.instances_minus_one + 1
+                for i in range(inst):
+                    elem_page_id = (element.type, i)
+                    elem_size = element.size_minus_one + 1
+                    object_tables[elem_page_id] = element
+                    self.create_page(elem_page_id, offset, elem_size)
+                    offset += elem_size
 
-        if result:
+            page_list['obj'].set_info(object_tables)
+            return self.check_info_crc(page_list)
+        else:   #not need parse
             return True

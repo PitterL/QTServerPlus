@@ -70,6 +70,8 @@ class LogicDevice(Mm):
         cmd_size = cmd_info['size']
         cmd_page_id = cmd_info['page_id']
 
+        print(self.__class__.__name__,  cmd, data)
+
         data_size = len(data['value'])
         page = self.get_page(cmd_page_id)
         start = cmd_addr - page.addr()
@@ -78,9 +80,10 @@ class LogicDevice(Mm):
         if data_size == cmd_size:
             #self.prepare_message(Message.MSG_DEVICE_PAGE_READ, self.id(), seq, data)
             result = self.page_parse(cmd_page_id)
+            #print(self.__class__.__name__, page, result)
             if result:
                 message = ServerMessage(Message.MSG_DEVICE_PAGE_READ, self.id(), self.next_seq(seq), value=page)
-            else:
+            else:   #failed
                 page.clear_buffer()
                 message = ServerMessage(Message.MSG_DEVICE_PAGE_READ, self.id(), self.next_seq(seq), value=None)
 
@@ -160,8 +163,8 @@ class LogicDevice(Mm):
             ServerError("Unknown page {} requested".format(page_id))
 
     def handle_device_page_read(self, seq, kwargs):
-        page_id = kwargs['page_id']
-        discard = kwargs['discard'] if 'discard' in kwargs else False
+        page_id = kwargs.get('page_id')
+        discard = kwargs.get('discard', True)
 
         if self.has_page(page_id):
             page = self.get_page(page_id)
@@ -189,7 +192,7 @@ class LogicDevice(Mm):
         type = msg.type()
         seq = msg.seq()
 
-        print("handle_command")
+        print(self.__class__.__name__, "handle_command")
 
         if type == Message.CMD_DEVICE_PAGE_READ:
             self.handle_device_page_read(seq, msg.extra_info())

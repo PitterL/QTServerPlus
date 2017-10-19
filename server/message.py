@@ -107,7 +107,7 @@ class Message(BaseMessage):
         if self.ready():
             self.set_status(Message.SEND)
             data = self.msg_data()
-            print("Send Message: {}".format(data))
+            print(self.__class__.__name__, "Send Message: {}".format(data))
             pipe.send(data)
             return True
 

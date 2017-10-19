@@ -50,8 +50,8 @@ class HidCommand(Message):
     CMD_WRITE_READ = 0x51
 
     TIMEOUT = 1 #second
-    SIZE_MAX = {'r': 64, 'w': 59}
-    SIZE_PROPER = {'r': 64, 'w': 48}
+    SIZE_MAX = {'r': 62, 'w': 59}
+    #SIZE_PROPER = {'r': 64, 'w': 48}
 
     R = Dotdict({'RESPONSE_OK': 0})
     W = Dotdict({'RESPONSE_OK': 4})
@@ -116,10 +116,10 @@ class HidCommand(Message):
 
         return raw_data
 
-    def proper_size(self, op):
-        if op not in HidCommand.SIZE_PROPER.keys():
-            BusError('Unknow proper_size op {}'.format(op))
-        return HidCommand.SIZE_MAX[op]
+    # def proper_size(self, op):
+    #     if op not in HidCommand.SIZE_PROPER.keys():
+    #         BusError('Unknow proper_size op {}'.format(op))
+    #     return HidCommand.SIZE_MAX[op]
 
     def transfered_size(self):
         return self.trans_size
@@ -156,9 +156,9 @@ class HidCommand(Message):
 
         if self.ready():
             self.set_status(Message.SEND)
-            print("Send HID Message: {}".format(self.raw_data()))
+            print(self.__class__.__name__, "Send HID Message: {}".format(list(map(hex, self.raw_data()))))
             raw_data = self.to_trans_format(self.raw_data(), len(pipe[Hid_Device.USAGE_ID_OUTPUT]))
-            print(raw_data)
+            print(list(map(hex, raw_data)))
             pipe.set_raw_data(raw_data)
             pipe.send()
             return True
@@ -217,7 +217,7 @@ class Hid_Device(PhyDevice):
                 break
 
         self.phy.add_event_handler(self.USAGE_ID_INPUT,
-                                   self.hid_event_handler, usbhid.HID_EVT_CHANGED)  # level usage
+                                   self.hid_event_handler, usbhid.HID_EVT_ALL)  # level usage
         # except:
         #    HidError("Hid device open failed")
 
@@ -230,7 +230,7 @@ class Hid_Device(PhyDevice):
     def hid_event_handler(self, raw_data, event_type):  #this may be a asyn thread/process, need lock report pipe
         "simple usage control handler"
 
-        print("HID message (event {}): {}".format(event_type, raw_data))
+        print("HID device message (event {}): {}".format(event_type, raw_data))
 
         HidMessage(HidMessage.MSG_HID_RAW_DATA, self.id(), Message.seq_root(), event=event_type, value=array.array('B', raw_data),
                    pipe=self.pipe_hid_event).send()
@@ -271,7 +271,7 @@ class Hid_Device(PhyDevice):
         DeviceMessage(Message.MSG_DEVICE_NAK, self.id(), seq, pipe=self.logic_pipe()).send()
 
     def handle_hid_message(self, msg):
-        print("handle_hid_message")
+        print(self.__class__.__name__, "handle_hid_message")
 
         result = None
         for i, cmd in enumerate(self.hid_cmd[:]):
