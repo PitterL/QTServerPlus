@@ -184,11 +184,18 @@ class PageElementMmap(object):
         if values:
             self.set_values(values)
 
+    def __str__(self):
+        return super(PageElementMmap, self).__str__() + "page id {}, inst {}".format(self.id(), self.parent_inst())
+
     def valid(self):
         return self.__values is not None
 
     def id(self):
         return self.__id
+
+    def instance_id(self):
+        if isinstance(self.id(), tuple):
+            return self.id()[-1]
 
     def parent_inst(self):
         return 0
@@ -298,7 +305,7 @@ class Page2Mem(PageElementMmap):
 class PagesMemoryMap(object):
 
     def __init__(self, chip_id):
-        self.mmap_table = {}
+        self.mmap_table = OrderedDict()
 
         #build page 0 memory map table
         mmem = Page0Mem(chip_id)
@@ -310,11 +317,14 @@ class PagesMemoryMap(object):
             mmem = Page1Mem(object_num)
             self.set_mmap(mmem)
 
+    def inited(self):
+        return len(self.mmap_table) > 2 #has get object table
+
     def set_mmap(self, mmem):
+        #print(self.__class__.__name__, "set_mmap", mmem)
         self.mmap_table[mmem.id()] = mmem
 
     def get_mmap(self, page_id=None):
-
         if page_id is not None:
             if page_id in self.mmap_table.keys():
                 return self.mmap_table[page_id]
@@ -322,6 +332,9 @@ class PagesMemoryMap(object):
             return self.mmap_table
 
     def create_default_mmap_pages(self):
+        if self.inited():
+            return
+
         page0_mmap = self.get_mmap(Page.ID_INFORMATION)
         if not page0_mmap:
             return

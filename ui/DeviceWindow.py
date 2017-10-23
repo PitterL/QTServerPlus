@@ -1,35 +1,61 @@
 import kivy
 kivy.require('1.0.6') # replace with your current kivy version !
 
-from kivy.lang import Builder
+#from kivy.lang import Builder
+
+from kivy.uix.boxlayout import BoxLayout
 
 from server.message import Message, UiMessage, Token
 from server.devinfo import Page
 
 from tools.mem import ChipMemoryMap
-from ui.element import WidgetRootElement, WidgetPageElement
+#from ui.PageElement import PageElementRoot, WidgetPageElement
+from ui.PageElement import WidgetPageElement
 
 class WinError(Exception):
     "Message error exception class type"
     pass
 
-class DeviceWindow(WidgetRootElement):
+class DeviceWindow(BoxLayout):
     CMD_STACK_DEPTH = 1
+    (UP_CONTROL_BAR, DOWN_CONTROL_BAR, LEFT_CONTROL_BAR, right_CONTROL_BAR, PAGE_ELEMENT) = ("up", 'down', 'left', 'right', 'center')
 
     def __init__(self, id, *args, **kwargs):
-        super(DeviceWindow, self).__init__(*args, **kwargs)
         self.__id = id
         self.cmd_seq = 0
         self.cmd_list = []
         self.object_table = {}
-        #self.widget_root = WidgetRootElement()
-        #self.page_widgets = {}
         self.chip = None
-        #self.object_buf = {}
-        print("create {} {} id {}".format(self.__class__.__name__, self.__init__.__name__, self.id()))
+        self.__layout = {}
 
-    #def __str__(self):
-    #    return super(DeviceWindow, self).__str__() + '(' + self.id() + ')'
+        super(DeviceWindow, self).__init__(*args, **kwargs)
+
+    def __str__(self):
+        return super(DeviceWindow, self).__str__() + '(' + self.id() + ')'
+
+    def get_layout(self, name):
+        return self.__layout.get(name, None)
+
+    def add_layout(self, name, widget):
+        self.__layout[name] = widget
+        self.add_widget(widget)
+
+    def clear_layout(self):
+        #print(self.__class__.__name__, "clear layout", self.__layout)
+        self.__layout.clear()
+        self.clear_widgets()
+
+    def get_element(self, element_id):
+        return self.ids[DeviceWindow.PAGE_ELEMENT].get_element(element_id)
+
+    def add_element(self, widget):
+        self.ids[DeviceWindow.PAGE_ELEMENT].add_element(widget)
+
+    def clear_elements(self):
+        self.ids[DeviceWindow.PAGE_ELEMENT].clear_elements
+
+    def set_default_element(self, widget):
+        self.ids[DeviceWindow.PAGE_ELEMENT].set_default_element(widget)
 
     def id(self):
         return self.__id
@@ -40,25 +66,6 @@ class DeviceWindow(WidgetRootElement):
     def next_seq(self):
         self.cmd_seq += 1
         return Token(self.cmd_seq)
-
-    # def parse_id_infomation(self, page):
-    #     self.id_infomation = Mm.IdInformation(struct.unpack("B"*ctypes.sizeof(Mm.IdInformation), data))
-
-    # def parse_object_table(self, data):
-    #     e_size = ctype.sizof(Mm.ObjectTableElement)
-    #     for n in range(self.id_infomation.object_num):
-    #         element = Mm.ObjectTableElement(struct.unpack_from("<BHBBB", data[n * esize: (n + 1) * esize]))
-    #         self.object_table[element.type] = element
-
-    # def parse_object_type(self, type, data):
-    #     if type in self.object_table.keys():
-    #         #element = self.object_table[type]
-    #         pass
-    #
-    # def parse_page(self, page):
-    #     page_id = page.id()
-    #     if page_id == Page.ID_INFORMATION:
-    #         self.parse_id_infomation(page)
 
     def prepare_command(self, msg):
         if len(self.cmd_list) >= self.CMD_STACK_DEPTH:
@@ -71,31 +78,17 @@ class DeviceWindow(WidgetRootElement):
         for cmd in self.cmd_list:
             cmd.send_to(pipe)
 
-    def handle_attach_msg(self, data):
-        #self.prepare_command(Message(Message.CMD_POLL_DEVICE_DEVICE, self.id(), self.next_seq()))
-        pass
-
-    def handle_connected_msg(self, attached):
-        #addr = data['value']
-        #self.ids.status.text = "Connected to {}".format(hex(attached))
-        print("{} connect {}".format(self.__class__.__name__, attached))
-
-        if attached:
-            kwargs = {'page_id': Page.ID_INFORMATION, 'discard': False}
-            command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
-            self.prepare_command(command)
-        else:
-            self.chip = None
-
     def create_page_element(self, page):
         if not self.chip:
             chip_id = page.buf()
             self.chip = ChipMemoryMap.get_chip_mmap(chip_id)
 
-        print(self.__class__.__name__, self.chip)
+        print(self.__class__.__name__, self.chip, "create page <{}>".format(page))
 
         if not self.chip:
             return
+
+        #print(self.__class__.__name__, self.chip.get_mmap())
 
         page_mm = self.chip.get_mmap(page.id())
         w_page = WidgetPageElement(page_mm)
@@ -107,15 +100,27 @@ class DeviceWindow(WidgetRootElement):
         if not self.chip:
             return
 
+        def sort_key(mm):
+            major, inst = mm.id()
+            if isinstance(major, str):
+                result = (ord(major) - ord('z') - 1, inst)
+            else:
+                result = (major, inst)
+
+            return result
+
         self.chip.create_default_mmap_pages()
         all_page_mmaps = self.chip.get_mmap()
-        for mmap in all_page_mmaps.values():
-            if mmap.parent_inst():
+        for mmap in sorted(all_page_mmaps.values(), key=sort_key):
+            #if mmap.parent_inst():
+            if mmap.instance_id() == 0:
                 widget = self.get_element(mmap.id())
                 if not widget:
                     w_page = WidgetPageElement(mmap)
                     w_page.bind(on_press=self.on_page_selected)
                     self.add_element(w_page)
+
+        self.set_default_element(Page.ID_INFORMATION)
 
     def distory_page_element(self):
         self.clear_elements()
@@ -141,8 +146,21 @@ class DeviceWindow(WidgetRootElement):
             command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
             self.prepare_command(command)
 
-    def handle_page_read_msg(self, page):
+    def handle_attach_msg(self, data):
+        #self.prepare_command(Message(Message.CMD_POLL_DEVICE_DEVICE, self.id(), self.next_seq()))
+        pass
 
+    def handle_connected_msg(self, attached):
+        print("{} connect {}".format(self.__class__.__name__, attached))
+
+        if attached:
+            kwargs = {'page_id': Page.ID_INFORMATION, 'discard': False}
+            command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
+            self.prepare_command(command)
+        else:
+            self.chip = None
+
+    def handle_page_read_msg(self, page):
         if not page:
             return
 
@@ -195,3 +213,17 @@ class DeviceWindow(WidgetRootElement):
                 print("Cmd completed. {}".format(cmd))
                 self.cmd_list.pop(i)
                 break
+
+if __name__ == '__main__':
+    import array
+    from kivy.app import App
+    from tools.mem import ChipMemoryMap
+    #from ui.PageElement import PageElementApp
+
+    class DeviceWindowApp(App):
+
+        def build(self):
+            root = DeviceWindow("test")
+            return root
+
+    DeviceWindowApp().run()

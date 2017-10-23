@@ -70,7 +70,7 @@ class LogicDevice(Mm):
         cmd_size = cmd_info['size']
         cmd_page_id = cmd_info['page_id']
 
-        print(self.__class__.__name__,  cmd, data)
+        print(self.__class__.__name__, "handle_page_read_msg", cmd, data)
 
         data_size = len(data['value'])
         page = self.get_page(cmd_page_id)
@@ -78,9 +78,7 @@ class LogicDevice(Mm):
         page.save_to_buffer(start, data['value'])
 
         if data_size == cmd_size:
-            #self.prepare_message(Message.MSG_DEVICE_PAGE_READ, self.id(), seq, data)
             result = self.page_parse(cmd_page_id)
-            #print(self.__class__.__name__, page, result)
             if result:
                 message = ServerMessage(Message.MSG_DEVICE_PAGE_READ, self.id(), self.next_seq(seq), value=page)
             else:   #failed
@@ -96,7 +94,7 @@ class LogicDevice(Mm):
 
     def handle_nak_msg(self, seq, data=None):
         #self.prepare_message(Message.MSG_DEVICE_NAK, self.id(), seq, data)
-        print("NAK")
+        print(self.__class__.__name__, "Get 'NAK' message")
 
     def prepare_message(self, message):
         self.msg_list.append(message)
@@ -192,7 +190,7 @@ class LogicDevice(Mm):
         type = msg.type()
         seq = msg.seq()
 
-        print(self.__class__.__name__, "handle_command")
+        print(self.__class__.__name__, "handle_command", msg)
 
         if type == Message.CMD_DEVICE_PAGE_READ:
             self.handle_device_page_read(seq, msg.extra_info())

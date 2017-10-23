@@ -36,7 +36,7 @@ class ObjectTableElement(ctypes.Structure):
     _pack_ = 1
 
 class Page(object):
-    (ID_INFORMATION, OBJECT_TABLE) = range(2)  # the value must < 5, which MXT_GEN_MESSAGE_T5 start
+    (ID_INFORMATION, OBJECT_TABLE) = (('I', -1), ('T', -1))  # the value must < 5, which MXT_GEN_MESSAGE_T5 start
     #
     # compond_id is made of OBJECT_ID and INSTANCE_ID
     #
@@ -55,7 +55,7 @@ class Page(object):
         self.__buffer = array.array('B', [])  # copy from cache data if split reading complete
         self.info = information
 
-        print(self.__class__.__name__, self.__str__())
+        #print(self.__class__.__name__, self.__str__())
 
     def __str__(self):
         return "Page {}: addr {start}\tlen {len},\tdata {data}".format(self.id(), start=self.addr(), len=self.size(), data=self.buf())
@@ -63,14 +63,17 @@ class Page(object):
     def __repr__(self):
         return super(Page, self).__repr__() + '(' + self.__str__() + ')'
 
-    def compound(self):
-        return self.sub_id() >= 0
+    # def compound(self):
+    #     return self.sub_id() >= 0
+
+    # def id(self):
+    #     if self.compound():
+    #         return (self.major_id(), self.sub_id())
+    #     else:
+    #         return self.major_id()
 
     def id(self):
-        if self.compound():
-            return (self.major_id(), self.sub_id())
-        else:
-            return self.major_id()
+        return (self.major, self.minor)
 
     def major_id(self):
         return self.major
@@ -195,8 +198,7 @@ class MemMapStructure(object):
         return page_id in self.__pages.keys()
 
     def get_page(self, page_id):
-        if page_id in self.__pages.keys():
-            return self.__pages[page_id]
+        return self.__pages.get(page_id, None)
 
     def to_page_name(self, offset):
         for page in self.__pages.values():

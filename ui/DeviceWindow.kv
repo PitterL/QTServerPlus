@@ -1,0 +1,66 @@
+#:import UpControlBar ui.PageControlBar.UpControlBar
+#:import DownControlBar ui.PageControlBar.DownControlBar
+#:import LeftControlBar ui.PageControlBar.LeftControlBar
+#:import DownControlBar ui.PageControlBar.DownControlBar
+#:import PageElementRoot ui.PageElement.PageElementRoot
+
+<DeviceWindow>
+    orientation:'vertical'
+    UpControlBar:
+        id: up
+        pos_hint: {'top':1}
+        ActionView:
+            use_separator: True
+            ActionPrevious:
+                title: 'Action Bar'
+                with_previous: True
+            ActionOverflow:
+                icon: 'atlas://data/images/defaulttheme/overflow'
+            ActionLabel:
+                text: 'Label0'
+            ActionSeparator:
+            ActionButton:
+                text: 'Btn0'
+                icon: 'atlas://data/images/defaulttheme/audio-volume-high'
+            ActionButton:
+                text: 'Btn1'
+        #size_hint: 1, 0.8
+        #pos_hint: {'center_x': .5, 'center_y': .5}
+    BoxLayout:
+        orientation: 'horizontal'
+        #canvas.after:
+        #    Color:
+        #        rgba: 0.5, 0,5, 0.5, 0.1
+        #    Rectangle:
+        #        pos: self.pos
+        #        size: self.size
+        #size_hint: 1, 1
+        #pos_hint: {'center_x': .5, 'center_y': .5}
+        LeftControlBar:
+            id: left
+            size_hint_x: 0.25
+            #pos_hint: {'center_x': .25, 'center_y': .5}
+        CenterContext:
+            id: center
+        RightControlBar:
+            id: right
+            size_hint_x: 0.05
+            #pos_hint: {'center_x': .75, 'center_y': .5}
+    DownControlBar:
+        id: down
+        pos_hint: {'down':1}
+        ActionView:
+            use_separator: True
+            ActionPrevious:
+                title: 'Action Bar'
+                with_previous: True
+            ActionOverflow:
+                icon: 'atlas://data/images/defaulttheme/overflow'
+            ActionLabel:
+                text: 'Label0'
+            ActionSeparator:
+            ActionButton:
+                text: 'Btn0'
+                icon: 'atlas://data/images/defaulttheme/audio-volume-high'
+            ActionButton:
+                text: 'Btn1'

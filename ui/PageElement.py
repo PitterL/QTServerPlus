@@ -1,4 +1,3 @@
-from kivy.lang import Builder
 # from kivy.uix.gridlayout import GridLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.stacklayout import StackLayout
@@ -258,7 +257,7 @@ class WidgetRowElement(RecycleDataViewBehavior, BoxLayout):
                 setattr(self, k, v)
 
         if not skip_index:
-            idx_widget = WidgetRowIndexElement(self.__row_idx)
+            idx_widget = WidgetRowIndexElement(self.__row_idx + 1)
             self.add_layout(self.CHILD_ELEM_INDEX, idx_widget)
 
         data_widget = WidgetRowDataElement()
@@ -416,7 +415,7 @@ class WidgetRowTitleElement(WidgetRowElement):
         super(WidgetRowTitleElement, self).__init2__(**w_row_kwargs)
 
         raw_data = w_row_kwargs.get('raw_data')
-        #print(self.__class__.__name__, raw_data)
+        #print(self.__class__.__name__, "refresh_view_attrs", raw_data)
 
         for j, v in enumerate(raw_data):
             if isinstance(v, int):
@@ -428,6 +427,7 @@ class WidgetRowTitleElement(WidgetRowElement):
 
             kwargs = dict(col_idx=j, name=name, value=value, **w_field_kwargs)
             w_field = self.create_field_element(**kwargs)
+            #print(self.__class__.__name__, "w_field", raw_data)
             self.add_children_layout(self.CHILD_ELEM_DATA, w_field)
 
         self.index = index
@@ -491,7 +491,7 @@ class WidgetPageElement(TabbedPanelItem):
         #self.parent.page_selected(self)
 
     @classmethod
-    def layout_type(cls, id, name=None):
+    def layout_kwargs(cls, id, name=None):
         if id in cls.PAGE_LAYOUT_TABLE.keys():
             layout_kwargs = cls.PAGE_LAYOUT_TABLE[id]
         else:
@@ -502,28 +502,33 @@ class WidgetPageElement(TabbedPanelItem):
         else:
             return layout_kwargs
 
-    def layout(self, name):
-        if name in self.__layout.keys():
-            return self.__layout[name]
+    # def layout(self, name):
+    #     if name in self.__layout.keys():
+    #         return self.__layout[name]
 
     def add_layout(self, name, layout):
         self.__layout[name] = layout
         self.ids['content'].add_widget(layout)
+        #super(WidgetPageElement, self).add_widget(layout)
 
     def get_layout(self, name):
         return self.__layout[name]
 
     def create_page_tab_widget(self, page_mm, **kwargs):
+        # def to_tab_name(page_mm):
+        #     if page_mm.parent_inst():
+        #         major, minor = page_mm.id()
+        #         name = "T{}".format(major)
+        #         if page_mm.parent_inst() > 1:
+        #             name += "-{}".format(minor)
+        #     else:
+        #         id = page_mm.id()
+        #         name = "T{}".format(id)
+        #
+        #     return name
         def to_tab_name(page_mm):
-            if page_mm.parent_inst():
-                major, minor = page_mm.id()
-                name = "T{}".format(major)
-                if page_mm.parent_inst() > 1:
-                    name += "-{}".format(minor)
-            else:
-                id = page_mm.id()
-                name = "T{}".format(id)
-
+            major, minor = page_mm.id()
+            name = "{}".format(major)
             return name
 
         text = to_tab_name(page_mm)
@@ -561,12 +566,12 @@ class WidgetPageElement(TabbedPanelItem):
         self.add_layout(self.PAGE_CHILD_ELEM_CONTENT, root)
 
     def create_page_content_widget(self, page_mm):
-        title = WidgetPageElement.layout_type(self.id(), 'title')
+        title = WidgetPageElement.layout_kwargs(self.id(), 'title')
         if title:
+            #print(self.__class__.__name__, "create_page_content_widget", title)
             widget = self.create_rows_title_widget(page_mm, name=title)
-            # self.add_layout("Title", widget)
 
-        layout_kwargs = WidgetPageElement.layout_type(self.id())
+        layout_kwargs = WidgetPageElement.layout_kwargs(self.id())
         self.create_rows_widget(page_mm, layout_kwargs=layout_kwargs)
 
     def do_fresh(self, page_mm):
@@ -602,31 +607,32 @@ class WidgetPageElement(TabbedPanelItem):
         #                 else:
         #                     print("{} fresh page {}, field '{}' not found".format(self.__class__.__name__, page_mm.id(), w_field_value.id()))
 
-class WidgetRootElement(TabbedPanel):
+class PageElementRoot(TabbedPanel):
     def __init__(self, **kwargs):
         self.__elems_tab = {}
-        super(WidgetRootElement, self).__init__(**kwargs)
+        super(PageElementRoot, self).__init__(**kwargs)
+
+    def get_element(self, element_id):
+        if element_id in self.__elems_tab.keys():
+            return self.__elems_tab[element_id]
 
     def add_element(self, element):
-        super(WidgetRootElement, self).add_widget(element)
-        if element.id() == Page.ID_INFORMATION:
-            self.switch_to(element)
-
+        super(PageElementRoot, self).add_widget(element)
         self.__elems_tab[element.id()] = element
 
     def remove_element(self, element_id):
         widget = self.get_element(element_id)
         if widget:
             del self.__elems_tab[element_id]
-            super(WidgetRootElement, self).remove_widget(widget)
+            super(PageElementRoot, self).remove_widget(widget)
 
     def clear_elements(self, **kwargs):
         self.__elems_tab.clear()
-        super(WidgetRootElement, self).clear_widgets(**kwargs)
+        super(PageElementRoot, self).clear_widgets(**kwargs)
 
-    def get_element(self, element_id):
-        if element_id in self.__elems_tab.keys():
-            return self.__elems_tab[element_id]
+    def set_default_element(self, element_id=Page.ID_INFORMATION):
+        widget = self.__elems_tab[element_id]
+        self.switch_to(widget)
 
     def create_page_element(self):
         pass
@@ -637,13 +643,11 @@ if __name__ == '__main__':
     from kivy.app import App
     from tools.mem import ChipMemoryMap
 
-    Builder.load_file('element.kv')
-
-    class FocusApp(App):
+    class PageElementApp(App):
 
         def build(self):
             #root = ScrollView()
-            head_tabs = WidgetRootElement()
+            head_tabs = PageElementRoot()
             #root.add_widget(head_tabs)
             root = head_tabs
             v_chip_id = array.array('B', [164, 24, 16, 170, 32, 20, 40])
@@ -676,12 +680,24 @@ if __name__ == '__main__':
             w_page = WidgetPageElement(page_mmap)
             head_tabs.add_element(w_page)
 
+            def sort_key(mm):
+                major, inst = mm.id()
+                if isinstance(major, str):
+                    result = (ord(major) - ord('z') - 1, inst)
+                else:
+                    result = (major, inst)
+
+                #print("sort_key", result)
+                return result
+
             chip.create_default_mmap_pages()
             all_page_mmaps = chip.get_mmap()
-            for mmap in all_page_mmaps.values():
-                if mmap.parent_inst():  #not show with no instance
+            #for mmap in all_page_mmaps.values():
+            for mmap in sorted(all_page_mmaps.values(), key=sort_key):
+                #if mmap.parent_inst():  #not show with no instance
+                if mmap.instance_id() == 0:
                     w_page = WidgetPageElement(mmap)
                     head_tabs.add_element(w_page)
             return root
 
-    FocusApp().run()
+    PageElementApp().run()

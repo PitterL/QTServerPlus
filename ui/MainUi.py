@@ -1,19 +1,20 @@
 import kivy
-kivy.require('1.0.6') # replace with your current kivy version !
+kivy.require('1.1.10') # replace with your current kivy version !
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import ScreenManager, Screen, FallOutTransition
 from kivy.properties import NumericProperty, DictProperty, ListProperty
 from kivy.clock import Clock
+#from kivy.modules import inspector
+#from kivy.core.window import Window
 
-#from kivy.uix.tabbedpanel import TabbedPanel
-
+import os
 from random import random
 from multiprocessing import Pipe
 
 from server.message import Message
-from ui.window import DeviceWindow
+from ui.DeviceWindow import DeviceWindow
 
 class UiError(Exception):
     "Message error exception class type"
@@ -75,15 +76,33 @@ class MainScreen(Screen):
         self.recv()
         self.send()
 
-class UiApp(App):
+class MainUi(App):
     "Main Ui"
 
     def __init__(self, pipe_ui_with_server, **kwargs):
         self.pipe_ui_with_server = pipe_ui_with_server
-        super(UiApp, self).__init__(**kwargs)
+        super(MainUi, self).__init__(**kwargs)
+
+    def load_ui_kv_file(self, path):
+        # print(path)
+        for root, dirs, files in os.walk(path, topdown=True):
+            for name in files:
+                if name.endswith('.py'):
+                    raw = name.split('.')[:-1]
+                    raw.append('kv')
+                    kv_file = ".".join(raw)
+                    current_kv_file = root + "\\" + kv_file
+                    try:
+                        if os.path.exists(current_kv_file):
+                            print(current_kv_file)
+                            Builder.load_file(current_kv_file)
+                    except Exception as e:
+                        print('Parse failed: {:s}'.format(str(e)))
 
     def build(self):
-        #return Label(text='Hello world')
+        #print("aaaaaa")
+        self.load_ui_kv_file(os.curdir)
+
         root = ScreenManager(transition=FallOutTransition())
         scr = MainScreen(self.pipe_ui_with_server, name='Main Screen')
         root.add_widget(scr)
@@ -92,4 +111,4 @@ class UiApp(App):
 
 if __name__ == '__main__':
     parent, client = Pipe()
-    UiApp(parent).run()
+    MainUi(parent).run()
