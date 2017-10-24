@@ -10,7 +10,8 @@ from server.devinfo import Page
 
 from tools.mem import ChipMemoryMap
 #from ui.PageElement import PageElementRoot, WidgetPageElement
-from ui.PageElement import WidgetPageElement
+#from ui.PageElement import WidgetPageElement
+#from ui.PageControlBar import UpControlBar, DownControlBar, LeftControlBar, RightControlBar, CenterContentBar
 
 class WinError(Exception):
     "Message error exception class type"
@@ -18,7 +19,7 @@ class WinError(Exception):
 
 class DeviceWindow(BoxLayout):
     CMD_STACK_DEPTH = 1
-    (UP_CONTROL_BAR, DOWN_CONTROL_BAR, LEFT_CONTROL_BAR, right_CONTROL_BAR, PAGE_ELEMENT) = ("up", 'down', 'left', 'right', 'center')
+    (UP_CONTROL_BAR, DOWN_CONTROL_BAR, LEFT_CONTROL_BAR, right_CONTROL_BAR, CENTER_CONTENT_BAR) = ("up", 'down', 'left', 'right', 'center')
 
     def __init__(self, id, *args, **kwargs):
         self.__id = id
@@ -30,32 +31,10 @@ class DeviceWindow(BoxLayout):
 
         super(DeviceWindow, self).__init__(*args, **kwargs)
 
+        self._center = self.ids[DeviceWindow.CENTER_CONTENT_BAR]
+
     def __str__(self):
         return super(DeviceWindow, self).__str__() + '(' + self.id() + ')'
-
-    def get_layout(self, name):
-        return self.__layout.get(name, None)
-
-    def add_layout(self, name, widget):
-        self.__layout[name] = widget
-        self.add_widget(widget)
-
-    def clear_layout(self):
-        #print(self.__class__.__name__, "clear layout", self.__layout)
-        self.__layout.clear()
-        self.clear_widgets()
-
-    def get_element(self, element_id):
-        return self.ids[DeviceWindow.PAGE_ELEMENT].get_element(element_id)
-
-    def add_element(self, widget):
-        self.ids[DeviceWindow.PAGE_ELEMENT].add_element(widget)
-
-    def clear_elements(self):
-        self.ids[DeviceWindow.PAGE_ELEMENT].clear_elements
-
-    def set_default_element(self, widget):
-        self.ids[DeviceWindow.PAGE_ELEMENT].set_default_element(widget)
 
     def id(self):
         return self.__id
@@ -78,28 +57,37 @@ class DeviceWindow(BoxLayout):
         for cmd in self.cmd_list:
             cmd.send_to(pipe)
 
-    def create_page_element(self, page):
-        if not self.chip:
-            chip_id = page.buf()
-            self.chip = ChipMemoryMap.get_chip_mmap(chip_id)
+    # def get_layout(self, name):
+    #     return self.__layout.get(name, None)
+    #
+    # def add_layout(self, widget):
+    #     self.__layout[widget.id()] = widget
+    #     self.add_widget(widget)
+    #
+    # def clear_layout(self):
+    #     self.__layout.clear()
+    #     self.clear_widgets()
 
-        print(self.__class__.__name__, self.chip, "create page <{}>".format(page))
+    def create_chip(self, page_cache):
+        page_id = page_cache.id()
+        if page_id == Page.ID_INFORMATION:
+            self.chip = ChipMemoryMap.get_chip_mmap(page_cache.buf())
 
+    def get_element(self, page_id):
+        return self._center.get_element(page_id)
+
+    def create_page_element(self, page_id):
         if not self.chip:
             return
 
-        #print(self.__class__.__name__, self.chip.get_mmap())
+        print(self.__class__.__name__, self.chip, "create page {}".format(page_id))
 
-        page_mm = self.chip.get_mmap(page.id())
-        w_page = WidgetPageElement(page_mm)
-        w_page.bind(on_press=self.on_page_selected)
-        self.add_element(w_page)
-        return w_page
+        page_mm = self.chip.get_mmap(page_id)
+        widget = self._center.create_page_element(page_mm)
+        widget.bind(on_press=self.on_page_selected)
+        return widget
 
     def create_default_pages_element(self):
-        if not self.chip:
-            return
-
         def sort_key(mm):
             major, inst = mm.id()
             if isinstance(major, str):
@@ -109,37 +97,43 @@ class DeviceWindow(BoxLayout):
 
             return result
 
+        if not self.chip:
+            return
+
         self.chip.create_default_mmap_pages()
         all_page_mmaps = self.chip.get_mmap()
         for mmap in sorted(all_page_mmaps.values(), key=sort_key):
-            #if mmap.parent_inst():
-            if mmap.instance_id() == 0:
-                widget = self.get_element(mmap.id())
-                if not widget:
-                    w_page = WidgetPageElement(mmap)
-                    w_page.bind(on_press=self.on_page_selected)
-                    self.add_element(w_page)
+            page_id = mmap.id()
+            widget = self.get_element(page_id)
+            if not widget:
+                widget = self.create_page_element(page_id)
+                #print(self.__class__.__name__, "create_page_element", widget)
 
-        self.set_default_element(Page.ID_INFORMATION)
+        #self.set_default_element(Page.ID_INFORMATION)
 
     def distory_page_element(self):
         self.clear_elements()
 
-    def update_page_element(self, page):
-        page_id = page.id()
-        widget = self.get_element(page_id)
+    def update_page_element(self, page_cache):
+        if not self.chip:
+            self.create_chip(page_cache)
+
+        page_id = page_cache.id()
+        widget = self._center.get_element(page_id)
         if not widget:
-            widget = self.create_page_element(page)
+            widget = self.create_page_element(page_id)
 
         if widget:
-            page_mm = self.chip.get_mmap(page.id())
+            #print(self.__class__.__name__, "update", widget, page_cache.buf())
+            page_mm = self.chip.get_mmap(page_id)
             if page_mm:
-                page_mm.set_values(page.buf())
+                page_mm.set_values(page_cache.buf())
                 widget.do_fresh(page_mm)
 
     def on_page_selected(self, instance):
-        print(instance)
-        page_id = instance.id()
+        #print(self.__class__.__name__, "on_page_selected", instance)
+
+        page_id = instance.selected_id()
         page_mm = self.chip.get_mmap(page_id)
         if not page_mm.valid():
             kwargs = {'page_id': page_id, 'discard': True}
@@ -160,27 +154,19 @@ class DeviceWindow(BoxLayout):
         else:
             self.chip = None
 
-    def handle_page_read_msg(self, page):
-        if not page:
+    def handle_page_read_msg(self, page_cache):
+        if not page_cache:
             return
 
-        self.update_page_element(page)
+        self.update_page_element(page_cache)
 
-        page_id = page.id()
+        page_id = page_cache.id()
         if page_id == Page.ID_INFORMATION:
             kwargs = {'page_id': Page.OBJECT_TABLE, 'discard': False}
             command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
             self.prepare_command(command)
         elif page_id == Page.OBJECT_TABLE:
             self.create_default_pages_element()
-        #if page_id not in self.page_tabs.keys():
-        #    tab = PageTab(page)
-        #    self.page_tabs[page_id] = tab
-        #    self.add_widget(tab)
-
-
-        #self.ids["message"] == "Page {} read: {}".format(page.id(), str(page))
-        #self.ids.message.text = str(page)
 
     def handle_page_write_msg(self, data):
         self.ids["message"] == "Page write: {}".format(data)

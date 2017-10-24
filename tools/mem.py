@@ -184,6 +184,8 @@ class PageElementMmap(object):
         if values:
             self.set_values(values)
 
+        #print(self.__class__.__name__, "init", self)
+
     def __str__(self):
         return super(PageElementMmap, self).__str__() + "page id {}, inst {}".format(self.id(), self.parent_inst())
 
@@ -289,16 +291,16 @@ class Page1Mem(PageElementMmap):
 
 class Page2Mem(PageElementMmap):
 
-    def __init__(self, page_id, inst, size, values=None):
-        self.__instance = inst
-        desc = self.load_page_desc(page_id, inst, size)
+    def __init__(self, page_id, parent_inst, size, values=None):
+        self.__parent_inst = parent_inst
+        desc = self.load_page_desc(page_id, parent_inst, size)
         super(Page2Mem, self).__init__(page_id, desc, values, RowElement)
 
     def parent_inst(self):
-        return self.__instance
+        return self.__parent_inst
 
-    def load_page_desc(self, page_id, inst, size):
-        #print(self.__class__.__name__, page_id, inst, size)
+    def load_page_desc(self, page_id, parent_inst, size):
+        #print(self.__class__.__name__, page_id, parent_inst, size)
         desc = ((('TBD', 8),),) * size
         return desc
 

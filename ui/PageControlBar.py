@@ -19,5 +19,5 @@ class RightControlBar(Button):
         super(RightControlBar, self).__init__(**kwargs)
         self.text = 'Right'
 
-class CenterContext(PageElementRoot):
+class CenterContentBar(PageElementRoot):
     pass
