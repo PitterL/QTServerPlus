@@ -83,7 +83,8 @@ class MainUi(App):
         self.pipe_ui_with_server = pipe_ui_with_server
         super(MainUi, self).__init__(**kwargs)
 
-    def load_ui_kv_file(self, path):
+    @staticmethod
+    def load_ui_kv_file(path):
         # print(path)
         for root, dirs, files in os.walk(path, topdown=True):
             for name in files:

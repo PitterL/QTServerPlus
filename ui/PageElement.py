@@ -770,21 +770,13 @@ if __name__ == '__main__':
     class PageElementApp(App):
 
         def build(self):
-            #root = ScrollView()
-            head_tabs = PageElementRoot()
-            #root.add_widget(head_tabs)
-            root = head_tabs
-            v_chip_id = array.array('B', [164, 24, 16, 170, 32, 20, 40])
-            #v_chip_id = array.array('B', [164, 24, 16, 170, 32, 20, 7, 0x3b, 0x4c, 0x5d])
-            chip = ChipMemoryMap.get_chip_mmap(v_chip_id)
 
+            root = PageElementRoot()
+
+            v_chip_id = array.array('B', [164, 24, 16, 170, 32, 20, 40])
+            chip = ChipMemoryMap.get_chip_mmap(v_chip_id)
             page_mmap = chip.get_mmap(Page.ID_INFORMATION)
-            w_page = WidgetPageElement(page_mmap)
-            head_tabs.add_element(w_page)
-            #test upgrade value
-            #w_page_check = head_tabs.get_element(Page.ID_INFORMATION)
-            #page_mmap.set_values([1,2,3,4,5,6,7, 0xa1, 0xd2, 0xc3])
-            #w_page_check.do_fresh(page_mmap)
+            root.create_page_element(page_mmap)
 
             v_block_info = array.array('B',
                   [117, 250, 0, 214, 5, 0, 37, 4, 6, 129, 0, 0, 44, 134, 6, 0, 0, 0, 5, 135, 6, 10, 0, 0, 6, 146, 6, 6,
@@ -797,12 +789,9 @@ if __name__ == '__main__':
                    11, 59, 0, 18, 101, 23, 12, 29, 0, 0, 104, 53, 12, 10, 0, 0, 108, 64, 12, 74, 0, 1, 109, 139, 12, 8,
                    0, 1, 111, 148, 12, 26, 2, 0, 112, 229, 12, 4, 1, 1, 113, 239, 12, 2, 0, 0])
 
-            #v_block_info = array.array('B',
-            #                           [117, 250, 0, 214, 5, 0,])
             page_mmap = chip.get_mmap(Page.OBJECT_TABLE)
             page_mmap.set_values(v_block_info)
-            w_page = WidgetPageElement(page_mmap)
-            head_tabs.add_element(w_page)
+            root.create_page_element(page_mmap)
 
             def sort_key(mm):
                 major, inst = mm.id()
@@ -816,12 +805,12 @@ if __name__ == '__main__':
 
             chip.create_default_mmap_pages()
             all_page_mmaps = chip.get_mmap()
-            #for mmap in all_page_mmaps.values():
             for mmap in sorted(all_page_mmaps.values(), key=sort_key):
-                #if mmap.parent_inst():  #not show with no instance
-                if mmap.instance_id() == 0:
-                    w_page = WidgetPageElement(mmap)
-                    head_tabs.add_element(w_page)
+                page_id = mmap.id()
+                widget = root.get_element(page_id)
+                if not widget:
+                    widget = root.create_page_element(mmap)
+
             return root
 
     PageElementApp().run()
