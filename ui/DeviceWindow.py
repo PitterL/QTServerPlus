@@ -57,17 +57,6 @@ class DeviceWindow(BoxLayout):
         for cmd in self.cmd_list:
             cmd.send_to(pipe)
 
-    # def get_layout(self, name):
-    #     return self.__layout.get(name, None)
-    #
-    # def add_layout(self, widget):
-    #     self.__layout[widget.id()] = widget
-    #     self.add_widget(widget)
-    #
-    # def clear_layout(self):
-    #     self.__layout.clear()
-    #     self.clear_widgets()
-
     def create_chip(self, page_cache):
         page_id = page_cache.id()
         if page_id == Page.ID_INFORMATION:
@@ -110,7 +99,7 @@ class DeviceWindow(BoxLayout):
                 widget = self.create_page_element(page_id)
                 #print(self.__class__.__name__, "create_page_element", widget)
 
-        #self.set_default_element(Page.ID_INFORMATION)
+        self._center.set_default_element(Page.ID_INFORMATION)
 
     def distory_page_element(self):
         self.clear_elements()
@@ -132,7 +121,7 @@ class DeviceWindow(BoxLayout):
                 widget.do_fresh(page_mm)
 
     def on_page_selected(self, instance):
-        #print(self.__class__.__name__, "on_page_selected", instance)
+        print(self.__class__.__name__, "on_page_selected", instance)
 
         page_id = instance.selected_id()
         page_mm = self.chip.get_mmap(page_id)

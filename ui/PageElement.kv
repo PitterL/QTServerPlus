@@ -2,11 +2,9 @@
     tab_pos: 'left_top'
     tab_width: 35
     tab_height: 30
-    size_hint_x: 0.8
+    #size_hint_x: 0.8
     pos_hint: {'center_x': .5, 'center_y': .5}
     do_default_tab: False
-
-#:import OpacityScrollEffect kivy.effects.opacityscroll.OpacityScrollEffect
 
 <WidgetPageMultiInstElement>:
     canvas.after:
@@ -21,7 +19,7 @@
         tab_pos: 'right_top'
         tab_width: 35
         tab_height: 30
-        size_hint_x: 0.8
+        #size_hint_x: 0.8
         pos_hint: {'center_x': .5, 'center_y': .5}
         do_default_tab: False
 
@@ -45,6 +43,7 @@
         #        pos: self.pos
         #        size: self.size
 
+#:import OpacityScrollEffect kivy.effects.opacityscroll.OpacityScrollEffect
 <WidgetPageContentBaseElement>:
     effect_cls:OpacityScrollEffect
     #viewclass: 'WidgetRowElement'

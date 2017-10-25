@@ -477,6 +477,8 @@ class WidgetPageElement(TabbedPanelItem):
         if page_mm.valid():
             self.create_page_content_widget(page_mm)
 
+        #print(self.__class__.__name__, "init", self)
+
     def __str__(self):
         return "{}, page {} inited={}".format(super(WidgetPageElement, self).__str__(), self.id(), self.inited())
 
@@ -613,20 +615,6 @@ class WidgetPageElement(TabbedPanelItem):
         else:
             self.create_page_content_widget(page_mm)
 
-        #layout = self.layout('Rows')
-        # if layout:
-        #     for w_row in layout.ids['content'].children:    #WidgetRowElement
-        #         for w_field_elem in w_row.children_layout(w_row.CHILD_ELEM_DATA):     #WidgetFieldElement
-        #             #print(self.__class__.__name__, w_field_elem)
-        #             w_field_value = w_field_elem.field_type(WidgetFieldElement.VALUE)   #WidgetFieldElementValue
-        #
-        #             if w_field_value:
-        #                 value = page_mm.select_idx(*w_field_value.id()) #(row_idx, col_idx)
-        #                 if value is not None:   #could be zero for value, but not None
-        #                     w_field_value.text = w_field_elem.to_field_value(w_field_value.row_idx(), w_field_value.col_idx(), value)
-        #                 else:
-        #                     print("{} fresh page {}, field '{}' not found".format(self.__class__.__name__, page_mm.id(), w_field_value.id()))
-
 class WidgetPageMultiInstElement(TabbedPanelItem):
 
     selected = BooleanProperty(False)
@@ -638,6 +626,8 @@ class WidgetPageMultiInstElement(TabbedPanelItem):
 
         super(WidgetPageMultiInstElement, self).__init__(text=str(major), **kwargs)
         self._content = self.ids['content']
+
+        #print(self.__class__.__name__, "init", self)
 
     def __str__(self):
         return super(WidgetPageMultiInstElement, self).__str__() + "{} {} {}".format(self.id(), self.parent_insts(), self.__elems_tab.keys())
@@ -683,10 +673,6 @@ class WidgetPageMultiInstElement(TabbedPanelItem):
         self.__elems_tab[page_id] = w_page
         self._content.add_widget(w_page)
 
-        #print(self.__class__.__name__, "add_element", len(self.__elems_tab))
-        # if len(self.__elems_tab) == 1:  # first element
-        #     self._content.switch_to(w_page)
-
     def remove_element(self, page_id):
         widget = self.get_element(page_id)
         if widget:
@@ -695,7 +681,7 @@ class WidgetPageMultiInstElement(TabbedPanelItem):
 
     def clear_elements(self):
         self.__elems_tab.clear()
-        super(PageElementRoot, self).clear_widgets()
+        super(WidgetPageMultiInstElement, self).clear_widgets()
 
     def do_fresh(self, page_mm):
         page_id = page_mm.id()
@@ -751,15 +737,17 @@ class PageElementRoot(TabbedPanel):
         self.__elems_tab.clear()
         super(PageElementRoot, self).clear_widgets(**kwargs)
 
-    # def set_default_element(self, element_id=Page.ID_INFORMATION):
-    #     major, inst = element_id
-    #     widget = self.__elems_tab.get(major, None)
-    #     if widget:
-    #         self.switch_to(widget)
-    #         if widget.parent_inst() > 1:
-    #             sub_widget = widget.get_element(element_id)
-    #             if sub_widget:
-    #                 widget.switch_to(sub_widget)
+    def set_default_element(self, element_id):
+        major, inst = element_id
+        widget = self.__elems_tab.get(major, None)
+        self.switch_to(widget)
+        if widget:
+            tab = self.get_current_tab()
+            #print(self.__class__.__name__, "set_default_element", tab)
+            if isinstance(tab, TabbedPanelHeader):
+                self.switch_to(widget)
+                tab = self.get_current_tab()
+                tab.dispatch('on_press')
 
 if __name__ == '__main__':
 

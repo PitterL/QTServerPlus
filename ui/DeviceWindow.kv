@@ -2,7 +2,8 @@
 #:import DownControlBar ui.PageControlBar.DownControlBar
 #:import LeftControlBar ui.PageControlBar.LeftControlBar
 #:import DownControlBar ui.PageControlBar.DownControlBar
-#:import PageElementRoot ui.PageElement.PageElementRoot
+#:import CenterContentBar ui.PageControlBar.CenterContentBar
+#:import CenterMessageBar ui.PageControlBar.CenterMessageBar
 
 <DeviceWindow>
     orientation:'vertical'
@@ -12,9 +13,17 @@
         orientation: 'horizontal'
         LeftControlBar:
             id: left
-        CenterContentBar:
-            id: center
+            size_hint_x: 0.25
+        BoxLayout:
+            orientation:'vertical'
+            size_hint_x: 0.8
+            CenterContentBar:
+                id: center
+            CenterMessageBar:
+                id: message
+                size_hint_y: 0.2
         RightControlBar:
             id: right
+            size_hint_x: 0.05
     UpControlBar:
         id: down
