@@ -247,6 +247,10 @@ if __name__ == '__main__':
     for msg in msg_list:
         root.handle_message(msg)
 
+    from kivy.modules import inspector
+    from kivy.core.window import Window
+    inspector.create_inspector(Window, root)
+
     #start ui
     app = DeviceWindowApp(root)
     app.run()

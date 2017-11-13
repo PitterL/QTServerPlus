@@ -102,7 +102,6 @@ class MainUi(App):
                         print('Parse failed: {:s}'.format(str(e)))
 
     def build(self):
-        #print("aaaaaa")
         self.load_ui_kv_file(os.curdir)
 
         root = ScreenManager(transition=FallOutTransition())

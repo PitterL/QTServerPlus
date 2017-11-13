@@ -1,0 +1,134 @@
+<CommandElemNameWidget>:
+    size_hint: (None, None)
+    size: (80, 30)
+    pos_hint: {'center_x': 0.5}
+
+<ElemValFixed>
+    size_hint: (None, None)
+    size: (80, 30)
+    pos_hint: {'center_x': 0.5}
+
+<ElemValVarBase>
+    multiline: False
+    write_tab: False
+    #background_color: (1, 1, 1, 1)
+    color_data_valid: (1, 1, 1, 1)
+    color_data_invalid: (1, 0.6, 0.6, 1)
+    cursor_color: (0, 0, 0, 1)
+    pos_hint: {'center_x': 0.5}
+
+<ElemValVar2>
+    size_hint: (None, None)
+    size: (80, 30)
+    padding_x: (self.width * 0.4 , self.width * 0.3)
+
+<ElemValVarX>
+    size_hint: (None, None)
+    size: (500, 30)
+
+<ElemInfoWidget>
+    size_hint: (None, None)
+    size: (100, 30)
+
+<CommandElementWidget>
+    orientation: 'vertical'
+    size_hint: (None, None)
+    size: self.minimum_size
+
+<ElemActionWidget>
+    size_hint: (None, None)
+    size: (30, 30)
+    text_size: self.width - 5, self.height - 5
+    valign: 'middle'
+    halign: 'center'
+    color: (0, 0 ,0 , 1)
+    background_normal: '..//images/button_white.png'
+    #background_down: '..//images/buttonoverlay_dn_010.png'
+
+<CommandActionWidget>
+    orientation: 'vertical'
+    #size_hint: (None, None)
+    #size: (200, 80)
+
+<CommandDataElementWidget>
+    orientation: 'horizontal'
+    size_hint: (None, None)
+    size: self.minimum_size
+
+<CommandRowWidget>
+    orientation: 'vertical'
+    pos_hint: {'top': 1}
+    size_hint: (None, None)
+    size: self.minimum_size
+
+    BoxLayout:
+        id: cmd
+        pos_hint: {'left': 1}
+        size_hint: (None, None)
+        size: self.minimum_size
+    BoxLayout:
+        id: data
+        pos_hint: {'left': 1}
+        size_hint: (None, None)
+        size: self.minimum_size
+
+<CommandContentArea>
+    orintation: 'vertical'
+    size_hint_y: None
+    size: self.minimum_size
+    canvas.before:
+        Color:
+            rgba: (0.1, 0.1, 0.1, 0.8)
+        Rectangle:
+            # self here refers to the widget i.e BoxLayout
+            pos: self.pos
+            size: self.size
+
+<CommandResultArea>
+    ScrollView:
+        scroll_type: ['bars', 'content']
+        bar_width: 10
+        TreeView:
+            id: commandhistroy
+            size_hint_y: None
+            hide_root: True
+            height: self.minimum_height
+
+    Splitter:
+        sizeable_from: 'left'
+        keep_within_parent: True
+        #rescale_with_parent: True
+        max_size: self.parent.width
+        min_size: 0.2
+
+        ScrollView:
+            id: commandresponse
+
+<DebugView>
+    BoxLayout:
+        #orientation: 'horizontal'
+        ScrollView:
+            scroll_type: ['bars', 'content']
+            bar_width: 10
+            size_hint_x: 0.1
+
+            WidgetTree:
+                id: commandtree
+                hide_root: True
+                size_hint: None, None
+                height: self.minimum_height
+                width: max(self.parent.width, self.minimum_width)
+                #selected_widget: root.widget
+                #on_select_widget: root.highlight_widget(args[1])
+
+        Splitter:
+            sizeable_from: 'left'
+            min_size: self.parent.width * 0.8
+            max_size: self.parent.width
+
+            BoxLayout:
+                orientation: 'vertical'
+                CommandContentArea:
+                    id: commandcontent
+                CommandResultArea:
+                    id: commandresult
