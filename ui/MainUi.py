@@ -16,6 +16,7 @@ from multiprocessing import Pipe
 
 from server.message import Message
 from ui.DeviceWindow import DeviceWindow
+from ui.DebugView import DebugView
 
 class UiError(Exception):
     "Message error exception class type"
@@ -31,7 +32,7 @@ class MainScreen(Screen):
         super(MainScreen, self).__init__(**kwargs)
 
     def add_or_remove_window(self, id, attached):
-        # print("add_or_remove_window++")
+        print("add_or_remove_window++", id, attached)
         # remove device
         if id in self.windows.keys():
             if not attached:
@@ -45,7 +46,7 @@ class MainScreen(Screen):
                 self.add_widget(new_win)
                 self.windows[id] = new_win
 
-        #print("add_or_remove_window--")
+        print("add_or_remove_window--")
 
     def dispatch_msg(self, id, msg):
         if id in self.windows.keys():
@@ -57,20 +58,19 @@ class MainScreen(Screen):
             msg = self.pipe_ui_with_server.recv()
             type = msg.type()
             id = msg.id()
-            print("Process<{}> get message: {}".format(self.__class__.__name__, msg))
-
+            print("Process<{}> recv message: {}".format(self.__class__.__name__, msg))
             #create or remove device window, root window only process this message
             if type == Message.MSG_DEVICE_ATTACH:
-                pass    #FIXME: here only need marked the status
+                self.add_or_remove_window(id, msg.value())  # detach
             elif type == Message.MSG_DEVICE_CONNECTED:
-                self.add_or_remove_window(id, msg.value())
+                self.add_or_remove_window(id, msg.value())  # attach
 
             # process message in window
             self.dispatch_msg(id, msg)
 
     def send(self):
         for id, win in self.windows.items():
-            win.send_command_to(self.pipe_ui_with_server)
+            win.process_command(self.pipe_ui_with_server)
 
     def update(self, dt):
         self.hue += 0.001

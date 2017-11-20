@@ -13,6 +13,8 @@ from tools.mem import ChipMemoryMap
 #from ui.PageElement import WidgetPageElement
 #from ui.PageControlBar import UpControlBar, DownControlBar, LeftControlBar, RightControlBar, CenterContentBar
 
+from ui.DebugView import DebugView
+
 class WinError(Exception):
     "Message error exception class type"
     pass
@@ -32,6 +34,7 @@ class DeviceWindow(BoxLayout):
         super(DeviceWindow, self).__init__(*args, **kwargs)
 
         self._center = self.ids[DeviceWindow.CENTER_CONTENT_BAR]
+        self._dbg_view = DebugView.register_debug_view()
 
     def __str__(self):
         return super(DeviceWindow, self).__str__() + '(' + self.id() + ')'
@@ -53,9 +56,23 @@ class DeviceWindow(BoxLayout):
 
         self.cmd_list.append(msg)
 
+    def prepare_debug_command(self):
+        if self._dbg_view:
+            value = self._dbg_view.pop_data()
+            if value:
+                kwargs = {'value': value}
+                command = UiMessage(Message.CMD_DEVICE_RAW_DATA, self.id(), self.next_seq(), **kwargs)
+                self.prepare_command(command)
+
     def send_command_to(self, pipe):
-        for cmd in self.cmd_list:
-            cmd.send_to(pipe)
+        if len(self.cmd_list):
+            busy = any([cmd.is_status(cmd.SEND) for cmd in self.cmd_list])
+            if not busy:
+                self.cmd_list[0].send_to(pipe)
+
+    def process_command(self, pipe):
+        self.prepare_debug_command()
+        self.send_command_to(pipe)
 
     def create_chip(self, page_cache):
         page_id = page_cache.id()
@@ -164,6 +181,10 @@ class DeviceWindow(BoxLayout):
     def handle_page_write_msg(self, data):
         self.ids["message"] == "Page write: {}".format(data)
 
+    def handle_raw_data_msg(self, data):
+        if self._dbg_view:
+            self._dbg_view.handle_data(data)
+
     def hand_nak_msg(self, msg):
         print(self.__class__.__name__, "NAK: ", msg)
 
@@ -182,6 +203,8 @@ class DeviceWindow(BoxLayout):
             self.handle_page_read_msg(val)
         elif type == Message.MSG_DEVICE_PAGE_WRITE:
             self.handle_page_write_msg(val)
+        elif type == Message.MSG_DEVICE_RAW_DATA:
+            self.handle_raw_data_msg(val)
         elif type == Message.MSG_DEVICE_NAK:
             self.hand_nak_msg(msg)
         else:
@@ -250,6 +273,9 @@ if __name__ == '__main__':
     from kivy.modules import inspector
     from kivy.core.window import Window
     inspector.create_inspector(Window, root)
+
+    dbg_view = DebugView(win=Window)
+    Window.bind(on_keyboard=dbg_view.keyboard_shortcut)
 
     #start ui
     app = DeviceWindowApp(root)

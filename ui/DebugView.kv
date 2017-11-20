@@ -1,11 +1,46 @@
+#:set LABEL_W 80
+#:set LABEL_H 30
+
 <CommandElemNameWidget>:
     size_hint: (None, None)
-    size: (80, 30)
-    pos_hint: {'center_x': 0.5}
+    size: (LABEL_H, LABEL_H)
+    auto_bring_to_front: False
+    do_translation: False
+    #pos_hint: {'center_x': 0.5}
+    Label:
+        id: content
+        size_hint: (None, None)
+        size: LABEL_W, LABEL_H
+        pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+
+
+<CommandElemNameRotWidget>:
+    size_hint: (None, None)
+    size: (LABEL_H, LABEL_H)
+    auto_bring_to_front: False
+    do_translation: False
+    rotation: 90
+    #pos_hint: {'center_x': 0.5}
+    Label:
+        id: content
+        size_hint: (None, None)
+        size: LABEL_H * 2, LABEL_H
+        pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+
+<CommandElemNameRotWidget1>:
+    size_hint: (None, None)
+    size: (LABEL_H, LABEL_H)
+    auto_bring_to_front: False
+    do_translation: False
+    rotation: 90
+    Label:
+        id: content
+        size_hint: (None, None)
+        size: LABEL_W, LABEL_H
 
 <ElemValFixed>
     size_hint: (None, None)
-    size: (80, 30)
+    size: (LABEL_W, LABEL_H)
     pos_hint: {'center_x': 0.5}
 
 <ElemValVarBase>
@@ -19,25 +54,43 @@
 
 <ElemValVar2>
     size_hint: (None, None)
-    size: (80, 30)
+    size: (LABEL_W, LABEL_H)
     padding_x: (self.width * 0.4 , self.width * 0.3)
 
 <ElemValVarX>
     size_hint: (None, None)
-    size: (500, 30)
+    size: (LABEL_W * 2, LABEL_H * 2)
 
 <ElemInfoWidget>
     size_hint: (None, None)
-    size: (100, 30)
+    size: (LABEL_H, LABEL_H)
+    auto_bring_to_front: False
+    do_translation: False
+    rotation: 90
+    Label:
+        id: content
+        size_hint: (None, None)
+        size: (LABEL_H * 2, LABEL_H)
+        markup: True
+        #pos_hint: {'center_x': 0.5}
 
 <CommandElementWidget>
     orientation: 'vertical'
     size_hint: (None, None)
     size: self.minimum_size
 
+<CommandDataElemNameWidget>:
+    size_hint: (None, None)
+    size: self.minimum_size
+
+<CommandDataElementWidget>
+    #orientation: 'horizontal'
+    size_hint: (None, None)
+    size: self.minimum_size
+
 <ElemActionWidget>
     size_hint: (None, None)
-    size: (30, 30)
+    size: (LABEL_H, LABEL_H)
     text_size: self.width - 5, self.height - 5
     valign: 'middle'
     halign: 'center'
@@ -46,20 +99,24 @@
     #background_down: '..//images/buttonoverlay_dn_010.png'
 
 <CommandActionWidget>
-    orientation: 'vertical'
-    #size_hint: (None, None)
-    #size: (200, 80)
-
-<CommandDataElementWidget>
-    orientation: 'horizontal'
+    cols: 1
+    rows: 2
+    #col_default_width: LABEL_H
     size_hint: (None, None)
     size: self.minimum_size
 
 <CommandRowWidget>
-    orientation: 'vertical'
-    pos_hint: {'top': 1}
-    size_hint: (None, None)
-    size: self.minimum_size
+    #orientation: 'vertical'
+    size_hint: 1, None
+    height: self.minimum_height
+    pos_hint: {'top':1}
+    canvas.before:
+        Color:
+            rgba: (0.1, 0.1, 0.1, 0.8)
+        Rectangle:
+            # self here refers to the widget i.e BoxLayout
+            pos: self.pos
+            size: self.size
 
     BoxLayout:
         id: cmd
@@ -71,11 +128,17 @@
         pos_hint: {'left': 1}
         size_hint: (None, None)
         size: self.minimum_size
+    BoxLayout:
+        id: set
+        pos_hint: {'right': 1}
+        size_hint: (None, None)
+        size: self.minimum_size
 
 <CommandContentArea>
     orintation: 'vertical'
     size_hint_y: None
-    size: self.minimum_size
+    height: self.minimum_height
+    pos_hint: {'top': 1}
     canvas.before:
         Color:
             rgba: (0.1, 0.1, 0.1, 0.8)
@@ -102,11 +165,33 @@
         min_size: 0.2
 
         ScrollView:
-            id: commandresponse
+            bar_width: 10
+            TreeView:
+                id: commandresponse
+                size_hint_y: None
+                hide_root: True
+                height: self.minimum_height
+<TreeViewWidget>
+    size_hint_y: None
+    height: LABEL_H
+    halign: 'left'
+    shorten: True
+    shorten_from: 'right'
+    text_size: self.size
+
+<TreeViewDataWidget>
 
 <DebugView>
+    size_hint_y: 0.2
     BoxLayout:
         #orientation: 'horizontal'
+        canvas.before:
+            Color:
+                rgba: .185, .18, .18, .95
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
         ScrollView:
             scroll_type: ['bars', 'content']
             bar_width: 10

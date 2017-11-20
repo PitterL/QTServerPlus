@@ -45,9 +45,7 @@ class HidCommand(Message):
     TAG     TAG2    TAG3
     0x4     0       0
     """
-
-    CMD_TEST = 0x80
-    CMD_WRITE_READ = 0x51
+    (CMD_TEST, CMD_WRITE_READ, CMD_RAW) = (0x80, 0x51, None)
 
     TIMEOUT = 1 #second
     SIZE_MAX = {'r': 62, 'w': 59}
@@ -59,15 +57,14 @@ class HidCommand(Message):
     def __init__(self, type, seq, **kwargs):
         self.usage = kwargs.pop('usage')
 
-        if 'repeat' in kwargs.keys():
-            self.__repeat = kwargs.pop('repeat')
+        self._delay = kwargs.pop('repeat', None)
+        if self._delay is not None:
+            self._repeat = True
+            self.repeat_count = 0
         else:
-            self.__repeat = 0
+            self._repeat = False
 
-        if 'delay' in kwargs.keys():
-            self.__delay = kwargs.pop('delay')
-        else:
-            self.__delay = 0  # float, delay seconds
+        self.__timeout = kwargs.pop('timeout', 0)
 
         super(HidCommand, self).__init__(HidCommand.NAME, type, 0, seq, **kwargs)
 
@@ -93,10 +90,22 @@ class HidCommand(Message):
                 self.op = 'w'
 
             self.trans_size = trans_size
+        elif type == HidCommand.CMD_RAW:
+            raw_data = array.array('B', kwargs['value'])
+            self.trans_size = self.to_trans_size(len(raw_data), 'w')
+            self.op = 'w'
         else:
             HidError("Unsuport hid command {}".format(type))
 
         self.__raw_data = raw_data
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return self.__class__.__name__ + " " + super().__str__() + \
+               " op={} len={} delay={} timeout={} repeat={}".format(
+                   self.op, self.transfered_size(), self.delay(), self.timeout(), self.repeatable())
 
     def is_read(self):
         return 'size_r' in self.kwargs.keys()
@@ -126,19 +135,40 @@ class HidCommand(Message):
 
     def timeout(self, delay=None):
         if delay is None:
-            delay = self.__delay
+            delay = self.__timeout
+        return time.time() >= self.time() + delay
+
+    def delay(self):
+        return self._delay
+
+    def delayed(self, delay=None):
+        if delay is None:
+            delay = self.delay()
         return time.time() >= self.time() + delay
 
     def delay_time(self):  #how long message could be send
         status = self.status()
-        if status == Message.INIT or (status == Message.REPEAT and self.repeat()):
-            return time.time() - self.time() - self.delay()
+        delayed = time.time() - self.time()
+        if status == Message.INIT:
+            return 0
+        elif status == Message.SEND:
+            return self.timeout() - delayed
+        elif status == Message.REPEAT:
+            return self.delay() - delayed
 
-    def repeat(self):
-        return self.__repeat and (self.__delay > 0)
+    def repeatable(self):
+        return self._repeat
 
-    def delay(self):
-        return self.__delay
+    def reset_repeat(self, status):
+        if status == Message.REPEAT:
+            self.repeat_count += 1
+        else:
+            self.repeat_count = 0
+
+        self.set_status(status)
+
+    def ready(self):
+        return self.is_status(Message.INIT) or (self.is_status(Message.REPEAT) and self.delayed())
 
     def raw_data(self):
         return self.__raw_data
@@ -265,6 +295,17 @@ class Hid_Device(PhyDevice):
                     pipe=self.logic_pipe()).send()
             return True
 
+    def handle_hid_raw_message(self, cmd, msg):
+        type = cmd.parent_type()
+        seq = cmd.seq()  # to parent seq
+        seq.pop()
+
+        value = msg.value()
+        DeviceMessage(type, self.id(), seq, value=value,
+                      pipe=self.logic_pipe()).send()
+
+        return True
+
     def handle_hid_nak_message(self, cmd):
         seq = cmd.seq()  # to parent seq
         seq.pop()
@@ -276,8 +317,8 @@ class Hid_Device(PhyDevice):
         result = None
         for i, cmd in enumerate(self.hid_cmd[:]):
             if cmd.status() == Message.SEND:
-                print(cmd)
-                print(msg)
+                print(self.__class__.__name__, "cmd", cmd)
+                print(self.__class__.__name__, "msg", msg)
 
                 self.hid_cmd.pop(i)
 
@@ -285,23 +326,25 @@ class Hid_Device(PhyDevice):
                     result = self.handle_hid_test_message(cmd, msg)
                 elif cmd.type() == HidCommand.CMD_WRITE_READ:
                     result = self.handle_hid_read_message(cmd, msg)
+                elif cmd.type() == HidCommand.CMD_RAW:
+                    result = self.handle_hid_raw_message(cmd, msg)
+
+                if result:
+                    if cmd.repeatable():  # repeatable message added in
+                        cmd.reset_repeat(Message.REPEAT)
+                        self.hid_cmd.append(cmd)
                 else:
-                    self.handle_hid_nak_message(seq)
+                    print(self.__class__.__name__, "Unknow hid device message: {}".format(msg))
+                    self.handle_hid_nak_message(cmd)
 
-                if cmd.repeat():  # repeatable message added in
-                    cmd.set_status(Message.REPEAT)
-                    self.hid_cmd.append(cmd)
                 break
-
-        if not result:
-            print("Unknow hid message: {}".format(msg))
 
     def hid_proc_poll_command(self, type, seq, extra_info):
         "Test command 1"
 
-        command = HidCommand(HidCommand.CMD_TEST, self.next_seq(seq), value=0xca, repeat=extra_info['repeat'], delay=extra_info['delay'], parent_type=type,
+        command = HidCommand(HidCommand.CMD_TEST, self.next_seq(seq),
+                         value=0xca, repeat=extra_info['repeat'], parent_type=type,
                          pipe=self.report_out, usage=Hid_Device.USAGE_ID_OUTPUT)
-        print(command)
         self.prepare_command(command)
 
     def hid_proc_block_read_command(self, type, seq, data):
@@ -310,38 +353,33 @@ class Hid_Device(PhyDevice):
                          pipe=self.report_out, usage=Hid_Device.USAGE_ID_OUTPUT)
         self.prepare_command(cmd)
 
+    def hid_proc_raw_data_command(self, type, seq, data):
+        cmd = HidCommand(HidCommand.CMD_RAW, self.next_seq(seq),
+                         value=data['value'], parent_type=type,
+                         pipe=self.report_out, usage=Hid_Device.USAGE_ID_OUTPUT)
+        self.prepare_command(cmd)
+
     def prepare_command(self, command):
         if len(self.hid_cmd) >= Hid_Device.CMD_STACK_DEPTH:
             HidError("Hid has command in list: {}".format(self.hid_cmd))
-            self.hid_cmd.pop()
+            cmd = self.hid_cmd.pop()
+            self.handle_hid_nak_message(cmd)
 
+        print(self.__class__.__name__, "prepare_command", command)
         self.hid_cmd.append(command)
-        #self.report_out(command.data())
 
     def handle_timeout_command(self):
         for i, cmd in enumerate(self.hid_cmd):
-            if cmd.timeout(Hid_Device.CMD_TIMEOUT):
-                MsgError("HID command timeout: {}".format(cmd))
-                self.hid_cmd.pop(i)
-                seq = cmd.seq()
-                seq.pop()
-                self.handle_nak_message(seq)
-
-                #FIXME: need reload repeat command?
-                """
-                if cmd.repeat():
-                    cmd.set_status(Message.REPEAT)
-                    self.hid_cmd.append(cmd)
-                """
+            if cmd.is_status(Message.SEND):
+                if cmd.timeout(Hid_Device.CMD_TIMEOUT):
+                    HidError("HID command timeout: {}".format(cmd))
+                    self.hid_cmd.pop(i)
+                    self.handle_hid_nak_message(cmd)
 
     def send_command(self):
-        pending = []
         #print("{} send command (has {} cmd in list)".format(self.__class__.__name__, len(self.hid_cmd)))
-        for cmd in self.hid_cmd:
-            if cmd.status() == Message.SEND:
-                pending.append(cmd)
-
-        if not len(pending):
+        pending = any(map(lambda c: c.status() == Message.SEND, self.hid_cmd))
+        if not pending:
             for cmd in self.hid_cmd:
                 if cmd.ready():
                     cmd.send() #send 1 only each time
@@ -356,6 +394,8 @@ class Hid_Device(PhyDevice):
             self.hid_proc_poll_command(type, seq, extra_info)
         elif type == Message.CMD_DEVICE_BLOCK_READ or type == Message.CMD_DEVICE_PAGE_READ:
             self.hid_proc_block_read_command(type, seq, extra_info)
+        elif type == Message.CMD_DEVICE_RAW_DATA:
+            self.hid_proc_raw_data_command(type, seq, extra_info)
         else:
             HidError("Unknown message type {}".format(type))
 
@@ -371,15 +411,13 @@ class Hid_Device(PhyDevice):
 
         if len(wait_list):
             interval = min(wait_list)
-            if interval < 0:
-                interval = 0
-
-            #print("set_polling interval {}".format(interval))
+            print("set_polling interval {} [{}]".format(interval, wait_list))
             return interval
+
+        #return None for infinite
 
     def process(self):
         super(Hid_Device, self).process()
-        #print("aaa")
 
         # try:
         self.open_dev()
@@ -390,7 +428,16 @@ class Hid_Device(PhyDevice):
             #try:
             for r in wait(all_pipes, timeout=self.poll_interval()):
                 if r:
-                    msg = r.recv()
+                    try:
+                        msg = r.recv()
+                    except EOFError:
+                        print("Process EOF: {}".format(self.__class__.__name__))
+                        close_handle = True
+                        self.close_dev()
+                        self.pipe_hid_event.close()
+                        self.pipe_hid_recv.close()
+                        return
+
                     print("Process<{}> get message: {}".format(self.__class__.__name__, msg))
 
                     location = msg.loc()
@@ -401,16 +448,8 @@ class Hid_Device(PhyDevice):
                     else:
                         pass
 
-                self.send_command()
-            # except EOFError:
-            #     print("Process EOF: {}".format(self.__class__.__name__))
-            #     close_handle = True
-            # except:
-            #     print("Process unexpected error: {}".format(self.__class__.__name__))
-
-        self.close_dev()
-        self.pipe_hid_event.close()
-        self.pipe_hid_recv.close()
+            self.send_command()
+            self.handle_timeout_command()
 
 class Hid_Bus(Bus):
 

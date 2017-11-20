@@ -12,7 +12,7 @@ class ServerError(Exception):
 
 class LogicDevice(Mm):
     CMD_STACK_DEPTH = 1
-    INTERVAL_POLL_DEVICE = 0.2  #seconds
+    INTERVAL_POLL_DEVICE = None  #seconds
     PAGE_ID_INFORMATION_QUERY_CONNECTED = False #test purpose
 
     def __init__(self, id, logic_pipe):
@@ -46,20 +46,25 @@ class LogicDevice(Mm):
     def set_addr(self, addr):
         self.addr = addr
     """
-    def handle_attached_msg(self):
-        kwargs = {'delay':LogicDevice.INTERVAL_POLL_DEVICE, 'repeat':True}
-        command = ServerMessage(Message.CMD_POLL_DEVICE, self.id(), self.next_seq(Message.seq_root()), **kwargs)
-        self.prepare_command(command)
+    def handle_attached_msg(self, seq, data):
+        val = data.get('value', None)
+        if val:
+            kwargs = {'repeat': LogicDevice.INTERVAL_POLL_DEVICE}
+            command = ServerMessage(Message.CMD_POLL_DEVICE, self.id(), self.next_seq(Message.seq_root()), **kwargs)
+            self.prepare_command(command)
+        else:
+            message = ServerMessage(Message.MSG_DEVICE_ATTACH, self.id(), self.next_seq(seq), value=None)
+            self.prepare_message(message)
 
     def handle_connected_msg(self, seq, data):
         #print("handle_connected_msg")
-
         if LogicDevice.PAGE_ID_INFORMATION_QUERY_CONNECTED:
             page_id = Page.ID_INFORMATION
             if not self.page_valid(page_id):
                 self.page_read(page_id, discard=True)
 
         address = 0x01  #FIXME: need report device Phy I2C Address
+
         message = ServerMessage(Message.MSG_DEVICE_CONNECTED, self.id(), self.next_seq(seq), value=address)
         self.prepare_message(message)
 
@@ -92,9 +97,14 @@ class LogicDevice(Mm):
                                     addr=cmd_addr + data_size, size=cmd_size - data_size, page_id=cmd_page_id)
             self.prepare_command(command)
 
-    def handle_nak_msg(self, seq, data=None):
-        #self.prepare_message(Message.MSG_DEVICE_NAK, self.id(), seq, data)
-        print(self.__class__.__name__, "Get 'NAK' message")
+    def handle_raw_data_msg(self, seq, cmd, data):
+        message = ServerMessage(Message.MSG_DEVICE_RAW_DATA, self.id(), self.next_seq(seq), value=data['value'])
+        self.prepare_message(message)
+
+    def handle_nak_msg(self, seq, cmd):
+        print(self.__class__.__name__, "Get NAK message:", seq, cmd)
+        message = ServerMessage(Message.MSG_DEVICE_NAK, self.id(), self.next_seq(seq))
+        self.prepare_message(message)
 
     def prepare_message(self, message):
         self.msg_list.append(message)
@@ -108,7 +118,7 @@ class LogicDevice(Mm):
         seq = msg.seq()
 
         if type == Message.MSG_DEVICE_ATTACH:
-            self.handle_attached_msg()  # only status of attached, since detach will Logici device is removed
+            self.handle_attached_msg(seq, msg.extra_info())  # only status of attached, since detach will Logici device is removed
         else:
             for i, cmd in enumerate(self.cmd_list[:]):
                 #print("handle_message: seq msg={} cmd={}".format(seq, cmd.seq()))
@@ -120,11 +130,13 @@ class LogicDevice(Mm):
                         self.handle_page_read_msg(seq, cmd, msg.extra_info())
                     elif type == Message.MSG_DEVICE_BLOCK_READ:
                         self.handle_block_read_msg(seq, cmd, msg.extra_info())
+                    elif type == Message.CMD_DEVICE_RAW_DATA:
+                        self.handle_raw_data_msg(seq, cmd, msg.extra_info())
                     elif type == Message.MSG_DEVICE_NAK:
-                        self.handle_nak_msg(seq, msg.extra_info())
+                        self.handle_nak_msg(seq, cmd)
                     else:
                         raise ServerError("Logic device id '{}' msg {} seq not match".format(id, msg))
-                        self.handle_nak_msg(seq)
+                        self.handle_nak_msg(seq, cmd)
 
                     del self.cmd_list[i]
                     break
@@ -179,8 +191,12 @@ class LogicDevice(Mm):
             ServerError("Unknown page {} requested".format(page_id))
             self.nak_command(seq)
 
-    def handle_device_page_write(self, id, seq, data):
+    def handle_device_page_write(self, seq, kwargs):
         pass
+
+    def handle_device_raw_send(self, seq, kwargs):
+        command = ServerMessage(Message.CMD_DEVICE_RAW_DATA, self.id(), self.next_seq(Message.seq_root()), **kwargs)
+        self.prepare_command(command)
 
     def nak_command(self, seq):
         message = ServerMessage(Message.MSG_DEVICE_NAK, self.id(), seq)
@@ -196,6 +212,8 @@ class LogicDevice(Mm):
             self.handle_device_page_read(seq, msg.extra_info())
         elif type == Message.CMD_DEVICE_PAGE_WRITE:
             self.handle_device_page_write(seq, msg.extra_info())
+        elif type == Message.CMD_DEVICE_RAW_DATA:
+            self.handle_device_raw_send(seq, msg.extra_info())
         else:
             ServerError("cmd {} not support".format(msg))
 
@@ -214,28 +232,6 @@ class QTouchserver(object):
         #server_to_bus_pipe.close() #fork in process
         #ui_pipe.close()
 
-    """
-    def dev_seq_match(self, id, seq):
-        if id in self.devices.keys():
-            dev = self.devices[id]
-            return dev.match_seq(seq)
-
-        raise ServerError("Logic device id '{}' not exist".format(id))
-    
-    def next_dev_seq(self, id):
-        if id in self.devices.keys():
-            dev = self.devices[id]
-            return dev.next_seq()
-
-        raise ServerError("Logic device id '{}' not exist".format(id))
-    
-
-    def set_dev_attr(self, id, var_name, var_value):
-        if id in self.devices.keys():
-            dev = self.devices[id]
-            if dev.hasattr(var_name):
-                dev.setattr(var_name, var_value)
-    """
     def report_ui_message(self, pipe):
         "Report message to up layer"
         for dev in self.devices.values():
@@ -251,12 +247,15 @@ class QTouchserver(object):
                 dev = self.devices[id]
                 del self.devices[id]
                 del dev
+
+                #   logice device is removed, so there should send message to UI individually
+                ServerMessage(Message.MSG_DEVICE_ATTACH, id, seq, value=None, pipe=self.ui_pipe).send()
         else:
             if logic_pipe:
                 dev = LogicDevice(id, logic_pipe)   #each logic device will communicate to a physical device
                 self.devices[id] = dev
 
-        #Message(Message.MSG_DEVICE_ATTACH, id, seq, value=True if value else False, pipe=self.ui_pipe).send()
+
 
     def dispatch_msg(self, id, msg):
         if id in self.devices.keys():
@@ -312,7 +311,7 @@ class QTouchserver(object):
     def process(self, pipe_to_bus, pipe_to_ui):
         print("process<{}> run".format(self.__class__.__name__))
         #self.bus_pipe = bus_pipe
-        #self.ui_pipe = ui_pipe
+        self.ui_pipe = pipe_to_ui
 
         close_handle = False
         while not close_handle:  #FIXME: there is somd end command

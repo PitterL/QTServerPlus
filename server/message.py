@@ -20,11 +20,11 @@ class BaseMessage(object):
         self._seq = seq  # may use Token as sequence
         self._kwargs = kwargs
 
-    #def __repr__(self):
-    #    return str([self.loc(), self.type(), self.id(), self.seq()]) + str(self.extra_info())
+    def __repr__(self):
+        return super.__repr__() + " " + self.__str__()
 
     def __str__(self):
-        return str([self.loc(), self.type(), self.id(), self.seq()]) + str(self.extra_info())
+        return "[loc='{}' type={} id={} seq={}] extra: {}".format(self.loc(), self.type(), self.id(), self.seq(), self.extra_info())
 
     def loc(self):
         return self._location
@@ -55,10 +55,10 @@ class Message(BaseMessage):
     (FORMAT_CMD, FORMAT_ID, FORMAT_SEQ) = range(3)
 
     #message type
-    (MSG_DEVICE_NAK, MSG_DEVICE_ATTACH, MSG_DEVICE_BOOTLOADER, MSG_DEVICE_CONNECTED, MSG_DEVICE_PAGE_READ, MSG_DEVICE_PAGE_WRITE, MSG_DEVICE_BLOCK_READ, MSG_DEVICE_BLOCK_WRITE) = range(10, 18)
+    (MSG_DEVICE_NAK, MSG_DEVICE_ATTACH, MSG_DEVICE_BOOTLOADER, MSG_DEVICE_CONNECTED, MSG_DEVICE_PAGE_READ, MSG_DEVICE_PAGE_WRITE, MSG_DEVICE_BLOCK_READ, MSG_DEVICE_BLOCK_WRITE, MSG_DEVICE_RAW_DATA) = range(10, 19)
 
     #command
-    (CMD_POLL_DEVICE, CMD_DEVICE_PAGE_READ, CMD_DEVICE_PAGE_WRITE, CMD_DEVICE_BLOCK_READ, CMD_DEVICE_BLOCK_WRITE) = range(100, 105)
+    (CMD_POLL_DEVICE, CMD_DEVICE_PAGE_READ, CMD_DEVICE_PAGE_WRITE, CMD_DEVICE_BLOCK_READ, CMD_DEVICE_BLOCK_WRITE, CMD_DEVICE_RAW_DATA) = range(100, 106)
     #command status
     (INIT, SEND, REPEAT) = range(3)
 
@@ -79,11 +79,20 @@ class Message(BaseMessage):
         self.__time = time.time()
         super(Message, self).__init__(location, type, id, seq, **kwargs)
 
-    def status(self):
-        return self._status
+    def __repr__(self):
+        return self.__repr__()
+
+    def __str__(self):
+        return super().__str__() + " " + "time={} ready={} status={}".format(self.time(), self.ready(), self.status())
 
     def time(self):
         return self.__time
+
+    def status(self):
+        return self._status
+
+    def is_status(self, status):
+        return self._status == status
 
     def set_status(self, status):
         self._status = status
