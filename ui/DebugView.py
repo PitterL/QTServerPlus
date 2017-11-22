@@ -20,6 +20,7 @@ import re
 from functools import partial
 from collections import OrderedDict
 import weakref
+import array
 
 class TreeViewProperty(BoxLayout, TreeViewNode):
 
@@ -64,9 +65,12 @@ class TreeViewDataWidget(TreeViewWidget):
     def __init__(self, **kwargs):
         self.value = kwargs.pop('value', None)
         if self.value:
-            text = " ".join(map(lambda x: "{:02X}".format(x), self.value))
+            if isinstance(self.value, (tuple, array.array, list)):
+                text = " ".join(map(lambda x: "{:02X}".format(x) if isinstance(x, int) else "'{}'".format(x), self.value))
+            else:
+                text = str(self.value)
         else:
-            text = '-'
+            text = 'None'
 
         super().__init__(**kwargs, text=text)
 
@@ -154,7 +158,11 @@ class Command(object):
                              ('data', {'length': {'len_r': -1}, 'size_hint_x': 1, 'disabled': True}))),
         "RegW": OrderedDict((('type', 0x51), ('len_w', None), ('len_r', 0), ('addr_l', None), ('addr_h', None),
                              ('data', {'length': {'len_w': -2}, 'size_hint_x': 1}))),
-        "Raw": OrderedDict((('_len', None), ('data', {'length': {'_len': 0}, 'size_hint_x': 1})))}
+        "Raw": OrderedDict((('_len', None), ('data', {'length': {'_len': 0}, 'size_hint_x': 1}))),
+        "IntR": OrderedDict((('type', 0x88), ('tag', 0x58), ('len_w', 2), ('len_r', None), ('addr_l', None), ('addr_h', None),
+                             ('data', {'length': {'len_r': -1}, 'size_hint_x': 1, 'disabled': True}))),
+        "Poll": OrderedDict((('type', 0x86), ('tag', 0x00))),
+    }
 
     def __init__(self, cmd_name):
         self.cmd_name = cmd_name
@@ -768,7 +776,7 @@ class DebugView(FloatLayout):
             if self.activated:
                 pass
 
-    def keyboard_shortcut(self, win, scancode, *largs):
+    def keyboard_shortcut1(self, win, scancode, *largs):
         print(self.__class__.__name__, win, scancode, largs)
         modifiers = largs[-1]
         if scancode == 100 and modifiers == ['ctrl']:

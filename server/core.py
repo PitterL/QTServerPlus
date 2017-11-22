@@ -101,6 +101,10 @@ class LogicDevice(Mm):
         message = ServerMessage(Message.MSG_DEVICE_RAW_DATA, self.id(), self.next_seq(seq), value=data['value'])
         self.prepare_message(message)
 
+    def handle_interrupt_data_msg(self, seq, data):
+        message = ServerMessage(Message.MSG_DEVICE_INTERRUPT_DATA, self.id(), self.next_seq(seq), value=data['value'])
+        self.prepare_message(message)
+
     def handle_nak_msg(self, seq, cmd):
         print(self.__class__.__name__, "Get NAK message:", seq, cmd)
         message = ServerMessage(Message.MSG_DEVICE_NAK, self.id(), self.next_seq(seq))
@@ -119,6 +123,8 @@ class LogicDevice(Mm):
 
         if type == Message.MSG_DEVICE_ATTACH:
             self.handle_attached_msg(seq, msg.extra_info())  # only status of attached, since detach will Logici device is removed
+        elif type == Message.MSG_DEVICE_INTERRUPT_DATA:
+            self.handle_interrupt_data_msg(seq, msg.extra_info())
         else:
             for i, cmd in enumerate(self.cmd_list[:]):
                 #print("handle_message: seq msg={} cmd={}".format(seq, cmd.seq()))

@@ -68,10 +68,10 @@ class HidCommand(Message):
 
         super(HidCommand, self).__init__(HidCommand.NAME, type, 0, seq, **kwargs)
 
-        raw_data = array.array('B', [])
+        value = []
         if type == HidCommand.CMD_TEST:
             #[type, 0, value]
-            raw_data = array.array('B', [type, 0, kwargs['value']])
+            value = array.array('B', [type, 0, kwargs['value']])
             self.trans_size = 0
             self.op = 'w'
         elif type == HidCommand.CMD_WRITE_READ:
@@ -79,25 +79,29 @@ class HidCommand(Message):
             if 'size' in kwargs.keys(): #only read need explicit size
                 #[type, LenW=2, LenR, AddrL, AddrH]
                 trans_size = self.to_trans_size(kwargs['size'], 'r')
-                raw_data = array.array('B', [type, 2, trans_size, addr_l, addr_h])
+                value = [type, 2, trans_size, addr_l, addr_h]
                 self.op = 'r'
             else:
                 #write #[type, LenW, LenR=0, AddrL, AddrH, Data0, Data1, ...]
                 addr_l, addr_h = kwargs['addr'].to_bytes(2, byteorder='little')
                 data = kwargs['data']
                 trans_size = self.to_trans_size(len(data), 'w')
-                raw_data = array.array('B', [type, trans_size + 2, 0, addr_l, addr_h]).extend(data[:trans_size])
+                value = [type, trans_size + 2, 0, addr_l, addr_h].extend(data[:trans_size])
                 self.op = 'w'
 
             self.trans_size = trans_size
         elif type == HidCommand.CMD_RAW:
-            raw_data = array.array('B', kwargs['value'])
-            self.trans_size = self.to_trans_size(len(raw_data), 'w')
+            value = kwargs['value']
+            self.trans_size = self.to_trans_size(len(value), 'w')
             self.op = 'w'
         else:
             HidError("Unsuport hid command {}".format(type))
 
-        self.__raw_data = raw_data
+        try:
+            self.__raw_data = array.array('B', value)
+        except:
+            print(self.__class__.__name__, "hid_proc_poll_command", "incruppted data", value)
+            self.__raw_data = None
 
     def __repr__(self):
         return self.__str__()
@@ -181,21 +185,30 @@ class HidCommand(Message):
     def send_to(self, pipe):
         if not pipe:
             HidError("Pipe is None")
+            return False
 
         status = self.status()
 
         if self.ready():
             self.set_status(Message.SEND)
-            print(self.__class__.__name__, "Send HID Message: {}".format(list(map(hex, self.raw_data()))))
-            raw_data = self.to_trans_format(self.raw_data(), len(pipe[Hid_Device.USAGE_ID_OUTPUT]))
-            print(list(map(hex, raw_data)))
-            pipe.set_raw_data(raw_data)
-            pipe.send()
-            return True
+            if self.raw_data():
+                print(self.__class__.__name__, "Send HID Message: {}".format(list(map(hex, self.raw_data()))))
+                raw_data = self.to_trans_format(self.raw_data(), len(pipe[Hid_Device.USAGE_ID_OUTPUT]))
+                #print(list(map(hex, raw_data)))
+                try:
+                    pipe.set_raw_data(raw_data)
+                    pipe.send()
+                    return True
+                except:
+                    print(self.__class__.__name__, "Send HID Message: Failed")
+
+            self.set_status(Message.ERROR)
+
+        return False
 
 class HidMessage(Message):
     #hid message type
-    (MSG_HID_RAW_DATA,) = range(600, 601)
+    (MSG_HID_RAW_DATA, MSG_HID_SIMULATED) = range(600, 602)
     HID_DEVICE = 'HID Device'
 
     def __init__(self, *args, **kwargs):
@@ -205,12 +218,16 @@ class HidMessage(Message):
     def send(self):
         #print("HidMessage send")
         self.report_lock.acquire()
-        super(HidMessage, self).send()
+
+        result = super(HidMessage, self).send()
         self.report_lock.release()
+
+        return result
 
 class Hid_Device(PhyDevice):
 
     VID_PID_LIST = [(0x03eb, 0x6123)]  #vid/pid
+    (HID_EVENT_ID, HID_EVENT_SIMULATED_ID) = (1, 999)   #True is return from hid.core if there is event
 
     USAGE_ID_INPUT = usbhid.get_full_usage_id(0xffff, 0x03)
     USAGE_ID_OUTPUT = usbhid.get_full_usage_id(0xffff, 0x05)
@@ -265,6 +282,11 @@ class Hid_Device(PhyDevice):
         HidMessage(HidMessage.MSG_HID_RAW_DATA, self.id(), Message.seq_root(), event=event_type, value=array.array('B', raw_data),
                    pipe=self.pipe_hid_event).send()
 
+
+    def hid_simulated_event(self, raw_data, event_type):
+        HidMessage(HidMessage.MSG_HID_SIMULATED, self.id(), Message.seq_root(), event=event_type, value=raw_data,
+                   pipe=self.pipe_hid_event).send()
+
     def handle_hid_test_message(self, cmd, msg):
         #print("handle_hid_test_message")
         seq = cmd.seq()  # to parent seq
@@ -276,9 +298,10 @@ class Hid_Device(PhyDevice):
         tag = value[0]
         address = value[1]
         if tag == cmd_data[1] and address == cmd_data[2]:
-            DeviceMessage(Message.MSG_DEVICE_CONNECTED, self.id(), seq, value=address,
+            return DeviceMessage(Message.MSG_DEVICE_CONNECTED, self.id(), seq, value=address,
                     pipe=self.logic_pipe()).send()
-            return True
+
+        return False
 
     def handle_hid_read_message(self, cmd, msg):
         #print("handle_hid_read_message")
@@ -291,9 +314,10 @@ class Hid_Device(PhyDevice):
 
         size = value[0]
         if size == cmd_data[2]:
-            DeviceMessage(type, self.id(), seq, value=value[1: size + 1],
+            return DeviceMessage(type, self.id(), seq, value=value[1: size + 1],
                     pipe=self.logic_pipe()).send()
-            return True
+
+        return False
 
     def handle_hid_raw_message(self, cmd, msg):
         type = cmd.parent_type()
@@ -301,10 +325,16 @@ class Hid_Device(PhyDevice):
         seq.pop()
 
         value = msg.value()
-        DeviceMessage(type, self.id(), seq, value=value,
+        return DeviceMessage(type, self.id(), seq, value=value,
                       pipe=self.logic_pipe()).send()
 
-        return True
+    def handle_hid_interrupt_message(self, msg):
+        type = Message.MSG_DEVICE_INTERRUPT_DATA
+        seq = Message.seq_root()
+
+        value = msg.value()
+        return DeviceMessage(type, self.id(), seq, value=value,
+                      pipe=self.logic_pipe()).send()
 
     def handle_hid_nak_message(self, cmd):
         seq = cmd.seq()  # to parent seq
@@ -316,28 +346,38 @@ class Hid_Device(PhyDevice):
 
         result = None
         for i, cmd in enumerate(self.hid_cmd[:]):
-            if cmd.status() == Message.SEND:
+            if cmd.is_status(Message.SEND): # HidMessage.MSG_HID_RAW_DATA
                 print(self.__class__.__name__, "cmd", cmd)
                 print(self.__class__.__name__, "msg", msg)
 
                 self.hid_cmd.pop(i)
-
                 if cmd.type() == HidCommand.CMD_TEST:
                     result = self.handle_hid_test_message(cmd, msg)
                 elif cmd.type() == HidCommand.CMD_WRITE_READ:
                     result = self.handle_hid_read_message(cmd, msg)
                 elif cmd.type() == HidCommand.CMD_RAW:
                     result = self.handle_hid_raw_message(cmd, msg)
-
-                if result:
-                    if cmd.repeatable():  # repeatable message added in
-                        cmd.reset_repeat(Message.REPEAT)
-                        self.hid_cmd.append(cmd)
                 else:
-                    print(self.__class__.__name__, "Unknow hid device message: {}".format(msg))
-                    self.handle_hid_nak_message(cmd)
-
+                    result = False
                 break
+
+            elif cmd.is_status(Message.ERROR): # HidMessage.MSG_HID_SIMULATED
+                print(self.__class__.__name__, "cmd error:", cmd)
+
+                self.hid_cmd.pop(i)
+                result = False
+                break
+
+        if result:
+            if cmd.repeatable():  # repeatable message added in
+                cmd.reset_repeat(Message.REPEAT)
+                self.hid_cmd.append(cmd)
+        else:
+            if result is not None:
+                print(self.__class__.__name__, "Unknow hid device message: {}".format(msg))
+                self.handle_hid_nak_message(cmd)
+            else:
+                self.handle_hid_interrupt_message(msg)
 
     def hid_proc_poll_command(self, type, seq, extra_info):
         "Test command 1"
@@ -345,6 +385,7 @@ class Hid_Device(PhyDevice):
         command = HidCommand(HidCommand.CMD_TEST, self.next_seq(seq),
                          value=0xca, repeat=extra_info['repeat'], parent_type=type,
                          pipe=self.report_out, usage=Hid_Device.USAGE_ID_OUTPUT)
+
         self.prepare_command(command)
 
     def hid_proc_block_read_command(self, type, seq, data):
@@ -378,7 +419,11 @@ class Hid_Device(PhyDevice):
 
     def send_command(self):
         #print("{} send command (has {} cmd in list)".format(self.__class__.__name__, len(self.hid_cmd)))
-        pending = any(map(lambda c: c.status() == Message.SEND, self.hid_cmd))
+        error = any(map(lambda c: c.is_status(Message.ERROR), self.hid_cmd))
+        if error:
+            self.hid_simulated_event(None, self.HID_EVENT_SIMULATED_ID)
+
+        pending = any(map(lambda c: c.is_status(Message.SEND), self.hid_cmd))
         if not pending:
             for cmd in self.hid_cmd:
                 if cmd.ready():

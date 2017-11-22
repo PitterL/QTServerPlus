@@ -181,9 +181,15 @@ class DeviceWindow(BoxLayout):
     def handle_page_write_msg(self, data):
         self.ids["message"] == "Page write: {}".format(data)
 
-    def handle_raw_data_msg(self, data):
+    def handle_dbg_msg(self, data):
         if self._dbg_view:
             self._dbg_view.handle_data(data)
+
+    def handle_raw_data_msg(self, data):
+        self.handle_dbg_msg(data)
+
+    def handle_interrupt_data_msg(self, data):
+        self.handle_dbg_msg(data)
 
     def hand_nak_msg(self, msg):
         print(self.__class__.__name__, "NAK: ", msg)
@@ -205,6 +211,8 @@ class DeviceWindow(BoxLayout):
             self.handle_page_write_msg(val)
         elif type == Message.MSG_DEVICE_RAW_DATA:
             self.handle_raw_data_msg(val)
+        elif type == Message.MSG_DEVICE_INTERRUPT_DATA:
+            self.handle_interrupt_data_msg(val)
         elif type == Message.MSG_DEVICE_NAK:
             self.hand_nak_msg(msg)
         else:

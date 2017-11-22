@@ -177,9 +177,10 @@
     halign: 'left'
     shorten: True
     shorten_from: 'right'
-    text_size: self.size
+    #text_size: self.size if self.text_size[0] > self.width else self.text_size
 
 <TreeViewDataWidget>
+    text_size: self.size
 
 <DebugView>
     size_hint_y: 0.2

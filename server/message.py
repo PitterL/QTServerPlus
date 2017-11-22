@@ -55,12 +55,12 @@ class Message(BaseMessage):
     (FORMAT_CMD, FORMAT_ID, FORMAT_SEQ) = range(3)
 
     #message type
-    (MSG_DEVICE_NAK, MSG_DEVICE_ATTACH, MSG_DEVICE_BOOTLOADER, MSG_DEVICE_CONNECTED, MSG_DEVICE_PAGE_READ, MSG_DEVICE_PAGE_WRITE, MSG_DEVICE_BLOCK_READ, MSG_DEVICE_BLOCK_WRITE, MSG_DEVICE_RAW_DATA) = range(10, 19)
+    (MSG_DEVICE_NAK, MSG_DEVICE_ATTACH, MSG_DEVICE_BOOTLOADER, MSG_DEVICE_CONNECTED, MSG_DEVICE_PAGE_READ, MSG_DEVICE_PAGE_WRITE, MSG_DEVICE_BLOCK_READ, MSG_DEVICE_BLOCK_WRITE, MSG_DEVICE_RAW_DATA, MSG_DEVICE_INTERRUPT_DATA) = range(10, 20)
 
     #command
     (CMD_POLL_DEVICE, CMD_DEVICE_PAGE_READ, CMD_DEVICE_PAGE_WRITE, CMD_DEVICE_BLOCK_READ, CMD_DEVICE_BLOCK_WRITE, CMD_DEVICE_RAW_DATA) = range(100, 106)
     #command status
-    (INIT, SEND, REPEAT) = range(3)
+    (INIT, SEND, REPEAT, ERROR) = range(4)
 
     #range 600 + used by USER
 
@@ -109,7 +109,8 @@ class Message(BaseMessage):
 
     def send_to(self, pipe):
         if not pipe:
-            MSGError("Pipe is None")
+            MSGError("Pipe is None", self.__str__())
+            return False
 
         status = self.status()
 
@@ -124,9 +125,10 @@ class Message(BaseMessage):
 
     def send(self):
         if not self.pipe:
-            MsgError('No pipe set')
-        else:
-            return self.send_to(self.pipe)
+            MsgError('No pipe set', self.__str__())
+            return False
+
+        return self.send_to(self.pipe)
 
 class DeviceMessage(Message):
     def __init__(self, *args, **kwargs):
