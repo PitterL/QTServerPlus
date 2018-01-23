@@ -283,7 +283,7 @@ if __name__ == '__main__':
     inspector.create_inspector(Window, root)
 
     dbg_view = DebugView(win=Window)
-    Window.bind(on_keyboard=dbg_view.keyboard_shortcut)
+    Window.bind(on_keyboard=dbg_view.keyboard_shortcut1)
 
     #start ui
     app = DeviceWindowApp(root)
