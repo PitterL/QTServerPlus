@@ -2,6 +2,7 @@ from collections import OrderedDict
 import struct
 import array
 import ctypes
+import re, json
 
 from server.devinfo import Page, ObjectTableElement
 
@@ -291,23 +292,24 @@ class Page1Mem(PageElementMmap):
 
 class Page2Mem(PageElementMmap):
 
-    def __init__(self, page_id, parent_inst, size, values=None):
+    def __init__(self, page_id, parent_inst, desc, values=None):
         self.__parent_inst = parent_inst
-        desc = self.load_page_desc(page_id, parent_inst, size)
+        #desc = self.load_page_desc(page_id, parent_inst, size)
         super(Page2Mem, self).__init__(page_id, desc, values, RowElement)
 
     def parent_inst(self):
         return self.__parent_inst
 
-    def load_page_desc(self, page_id, parent_inst, size):
-        #print(self.__class__.__name__, page_id, parent_inst, size)
-        desc = ((('TBD', 8),),) * size
-        return desc
+    # def load_page_desc(self, page_id, parent_inst, size):
+    #     #print(self.__class__.__name__, page_id, parent_inst, size)
+    #     desc = ((('TBD', 8),),) * size
+    #     return desc
 
 class PagesMemoryMap(object):
 
-    def __init__(self, chip_id):
+    def __init__(self, chip_id, datasheet=None):
         self.mmap_table = OrderedDict()
+        self.datasheet = datasheet
 
         #build page 0 memory map table
         mmem = Page0Mem(chip_id)
@@ -321,6 +323,36 @@ class PagesMemoryMap(object):
 
     def inited(self):
         return len(self.mmap_table) > 2 #has get object table
+
+    def load_page_desc(self, page_id, parent_inst, size):
+        pat_name = re.compile("Configuration for [A-Z_]+(\d+)( Instance (\d))?")
+        reg_id, inst_id = page_id
+        for k, v in self.datasheet.items():
+            result = pat_name.match(k)
+            if result is not None:
+                if str(reg_id) == result.group(1):
+                    if not result.group(3) or str(inst_id) == result.group(3):
+                        print("Found desc:", k)
+                        if len(v) != size + 1:
+                            print("desc size mismatch(%d) (%d):" %(size, len(v)), v)
+                            break
+
+                        desc = []
+                        for row in v[1:]:
+                            elem = row[2:]
+                            length = sum(map(lambda e: e[1], elem))
+                            if length != 8:
+                                print("Skip not integrity desc:", elem)
+                                elem = (('TBD', 8),)
+                            desc.append(elem)
+                        print(desc)
+                        return desc
+
+        return ((('TBD', 8),),) * size
+
+        #print(self.__class__.__name__, page_id, parent_inst, size)
+        desc = ((('TBD', 8),),) * size
+        return desc
 
     def set_mmap(self, mmem):
         #print(self.__class__.__name__, "set_mmap", mmem)
@@ -357,7 +389,8 @@ class PagesMemoryMap(object):
                 for i in range(inst):
                     page_id = (element.type, i)
                     size = element.size_minus_one + 1
-                    mmem = Page2Mem(page_id, inst, size)
+                    desc = self.load_page_desc(page_id, inst, size)
+                    mmem = Page2Mem(page_id, inst, desc)
                     self.set_mmap(mmem)
 
 class ChipMemoryMap(object):
@@ -366,9 +399,11 @@ class ChipMemoryMap(object):
     def __init__(self, chip_id):
         pass
 
-    @staticmethod
-    def parse_datasheet(self):
-        pass
+    @classmethod
+    def get_datasheet(cls, chip_id):
+        name = "..\\db\\{:02x}_{:02x}_{:02x}.db".format(*chip_id[:3])
+        with open(name, 'r') as fp:
+            return json.load(fp)
 
     @classmethod
     def get_chip_mmap(cls, chip_id):
@@ -376,6 +411,7 @@ class ChipMemoryMap(object):
         if cid in cls.CHIP_TABLE.keys():
             return cls.CHIP_TABLE[cid]
         else:
-            mmap = PagesMemoryMap(cid)
+            content = cls.get_datasheet(cid)
+            mmap = PagesMemoryMap(cid, content)
             cls.CHIP_TABLE[cid] = mmap
             return mmap

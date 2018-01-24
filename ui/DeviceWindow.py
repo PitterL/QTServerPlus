@@ -268,13 +268,21 @@ if __name__ == '__main__':
     page_cache.save_to_buffer(0, v_block_info)
     mm.page_parse(page_cache.id())
 
+    #page 100
+    page_id = (7, 0)
+    page_cache = mm.get_page(page_id)
+    cache = array.array('B', range(page_cache.length))
+    page_cache.save_to_buffer(0, cache)
+
     #root windows
     root = DeviceWindow('test')
     #enumulate message
     msg_list = [Message('local', Message.MSG_DEVICE_PAGE_READ, Page.ID_INFORMATION, root.next_seq(),
                       value=mm.get_page(Page.ID_INFORMATION)),
                 Message('local', Message.MSG_DEVICE_PAGE_READ, Page.OBJECT_TABLE, root.next_seq(),
-                        value=mm.get_page(Page.OBJECT_TABLE))]
+                        value=mm.get_page(Page.OBJECT_TABLE)),
+                Message('local', Message.MSG_DEVICE_PAGE_READ, page_id, root.next_seq(),
+                        value=mm.get_page(page_id))]
     for msg in msg_list:
         root.handle_message(msg)
 
