@@ -106,6 +106,6 @@ class mxt_app_log(loader):
 if __name__ == '__main__':
     log = mxt_app_log('HAWKEYE')
     #filename = r"D:\trunk\customers2\BYD\12.8_Qin100_1664s\log\ref2.log"
-    filename = r"D:\trunk\tools\maXStudio control files\Hawkeye_20180116_105452.csv"
+    filename = r"D:\trunk\tools\maXStudio control files\Hawkeye_20180125_190246.csv"
     log.parse(filename)
     log.save_to_file()

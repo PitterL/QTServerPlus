@@ -62,11 +62,13 @@
         #size_hint_y:None
         #height: self.minimum_height
 
-<WidgetPageTitleElement>
+<WidgetPageContentTitleElement>
     size_hint_y:None
     height: 55
 
-<WidgetPageRowsElement>
+<WidgetRowTitleElement>
+
+<WidgetPageContentDataElement>
 
 <WidgetRowElement>:
     size_hint_y: None
@@ -81,8 +83,9 @@
     #        size: self.size
 
 <WidgetRowIndexElement>
-    size_hint: None, 0.99
-    width: 15
+    size_hint: 0.07, 1
+    #size_hint: 0.3, 0.99
+    #width: 15
     #height: 35
     canvas.before:
         Color:
@@ -91,13 +94,29 @@
             # self here refers to the widget i.e BoxLayout
             pos: self.pos
             size: self.size
-    Label:
-        id:content
+    #Label:
+    #    id:content
+
+<WidgetFieldIndexElement>
+    #font_size: 12
+    shorten: True
+    shorten_from: 'right'
+    text_size: self.width, None
+    #bold: True
+    #valign: 'center'
 
 <WidgetRowDataElement>
-    size_hint_y: 0.99
+    size_hint: 0.93, 1
+    #size_hint_y: 0.99
     #height: 35
     orientation: 'horizontal'
+    canvas.before:
+        Color:
+            rgba: 0.1, 0.5, 0, 0.5
+        Rectangle:
+            # self here refers to the widget i.e BoxLayout
+            pos: self.pos
+            size: self.size
 
 <WidgetFieldElement>:
     orientation:'vertical'

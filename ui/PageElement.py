@@ -113,6 +113,9 @@ class WidgetFieldLabelBase(FocusLabel):
         return self.__id[1]
 
 
+class WidgetFieldIndexElement(FocusLabel):
+    pass
+
 class WidgetFieldLabelName(WidgetFieldLabelBase):
     pass
 
@@ -218,11 +221,16 @@ class WidgetFieldT1Element(WidgetFieldElement):
         return str(value)
 
 class WidgetRowIndexElement(BoxLayout):
-    def __init__(self, row_idx, **kwargs):
+    def __init__(self, row_idx_elems, **kwargs):
         super(WidgetRowIndexElement, self).__init__(**kwargs)
 
-        layout = self.ids['content']
-        layout.text = str(row_idx)
+        #layout = self.ids['content']
+        #layout.text = str(row_idx)
+        self.line_space = sum(map(lambda x: x[1] if x else 0, row_idx_elems))
+        for elem in row_idx_elems:
+            if elem:
+                percent = elem[1] / self.line_space
+                self.add_widget(WidgetFieldIndexElement(text=elem[0], size_hint_x=percent, font_size=12))
 
 class WidgetRowDataElement(BoxLayout):
     pass
@@ -250,15 +258,18 @@ class WidgetRowElement(RecycleDataViewBehavior, BoxLayout):
         self.__page_id = kwargs.get('page_id')
         self.__row_idx = kwargs.get('row_idx')
 
-        skip_index = kwargs.get('skip_index', True)
+        #skip_index = kwargs.get('skip_index', True)
         layout_kwargs = kwargs.get('layout_kwargs', dict())
         for k, v in layout_kwargs:
             if hasattr(self, k):
                 setattr(self, k, v)
 
-        if not skip_index:
-            idx_widget = WidgetRowIndexElement(self.__row_idx + 1)
-            self.add_layout(self.CHILD_ELEM_INDEX, idx_widget)
+        row_mm = kwargs.get('row_mm', None)
+        if row_mm is not None:
+            if row_mm.idx:
+                #idx_widget = WidgetRowIndexElement(self.__row_idx + 1)
+                idx_widget = WidgetRowIndexElement(row_mm.idx)
+                self.add_layout(self.CHILD_ELEM_INDEX, idx_widget)
 
         data_widget = WidgetRowDataElement()
         self.add_layout(self.CHILD_ELEM_DATA, data_widget)
@@ -324,11 +335,22 @@ class WidgetRowElement(RecycleDataViewBehavior, BoxLayout):
         kwargs = data
         w_row_kwargs = kwargs.get('w_row_kwargs')
         w_field_kwargs = kwargs.get('w_field_kwargs')
+        skip_value = w_field_kwargs.get('skip_value')
+        skip_name = w_field_kwargs.get('skip_name')
         self.__init2__(**w_row_kwargs)
 
         row_mm = w_row_kwargs.get('row_mm')
+        line_space = sum(map(lambda v: v.width, row_mm.field_values()))
         for j, (name, elem) in enumerate(row_mm):
-            kwargs = dict(col_idx=j, name=name, value=elem.value, **w_field_kwargs)
+            percent = elem.width / line_space
+            w_layout_kwargs = {'size_hint_x': percent}
+            kwargs = dict(col_idx=j, layout_kwargs=w_layout_kwargs, **w_field_kwargs)
+            if not skip_value:
+                kwargs['value'] = elem.value
+
+            if not skip_name:
+                kwargs['name'] = name
+
             w_field = self.create_field_element(**kwargs)
             self.add_children_layout(self.CHILD_ELEM_DATA, w_field)
 
@@ -355,6 +377,7 @@ class WidgetRowElement(RecycleDataViewBehavior, BoxLayout):
 
 class WidgetRowT1Element(WidgetRowElement):
     REPORT_ID_TABLE = OrderedDict()
+    ROW_TITLE_DATA_NAME = ('TYPE', 'ADDR', 'SIZE', 'INSTANCES', 'REPORT ID')
 
     def refresh_view_attrs(self, rv, index, data):
         ''' Catch and handle the view changes '''
@@ -363,36 +386,53 @@ class WidgetRowT1Element(WidgetRowElement):
         kwargs = data
         w_row_kwargs = kwargs.get('w_row_kwargs')
         w_field_kwargs = kwargs.get('w_field_kwargs')
+        skip_value = w_field_kwargs.get('skip_value')
+        skip_name = w_field_kwargs.get('skip_name')
         super(WidgetRowT1Element, self).__init2__(**w_row_kwargs)
 
         row_mm = w_row_kwargs.get('row_mm')
+        field_size = len(row_mm)
+
         #print(self.__class__.__name__, row_mm)
+        if not skip_value:
+            # pid = row_mm.get_field('type')
+            # addr = row_mm.get_field('start_address')
+            # size = row_mm.get_field('size_minus_one') + 1
+            # instances = row_mm.get_field('instances_minus_one') + 1
+            # num_report_ids = row_mm.get_field('num_report_ids') * instances
+            val = row_mm.values()
+            print(self.__class__.__name__, val)
+            pid, addr, size, instances, num_report_ids = val
+            size = size + 1
+            instances = instances + 1
+            num_report_ids = num_report_ids * instances
 
-        pid = row_mm.get_field('type')
-        addr = row_mm.get_field('start_address')
-        size = row_mm.get_field('size_minus_one') + 1
-        instances = row_mm.get_field('instances_minus_one') + 1
-        num_report_ids = row_mm.get_field('num_report_ids') * instances
+            if num_report_ids:
+                report_st = 1
+                for k, v in self.REPORT_ID_TABLE.items():
+                    if k == pid:
+                        break
 
-        if num_report_ids:
-            report_st = 1
-            for k, v in self.REPORT_ID_TABLE.items():
-                if k == pid:
-                    break
+                    report_st += v
 
-                report_st += v
+                report_end = report_st + num_report_ids - 1
+                report_id = (report_st, report_end)
+            else:
+                report_id = None
 
-            report_end = report_st + num_report_ids - 1
-            report_id = (report_st, report_end)
-        else:
-            report_id = None
+            if id not in self.REPORT_ID_TABLE.keys():
+                self.REPORT_ID_TABLE[pid] = num_report_ids
 
-        if id not in self.REPORT_ID_TABLE.keys():
-            self.REPORT_ID_TABLE[pid] = num_report_ids
+            elem_values = (pid, addr, size, instances, report_id)
 
-        elem_values = (pid, addr, size, instances, report_id)
-        for j, value in enumerate(elem_values):
-            kwargs = dict(col_idx=j, value=value, **w_field_kwargs)
+        for j in range(field_size):
+            kwargs = dict(col_idx=j, **w_field_kwargs)
+            if not skip_value:
+                kwargs['value'] = elem_values[j]
+
+            if not skip_name:
+                kwargs['name'] = self.ROW_TITLE_DATA_NAME[j]
+
             w_field = self.create_field_element(**kwargs)
             self.add_children_layout(self.CHILD_ELEM_DATA, w_field)
 
@@ -404,37 +444,52 @@ class WidgetRowT1Element(WidgetRowElement):
             rv, index, data)
 
 class WidgetRowTitleElement(WidgetRowElement):
-
-    def refresh_view_attrs(self, rv, index, data):
-        ''' Catch and handle the view changes '''
-        #print(self.__class__.__name__, rv, index, data)
-
-        kwargs = data
-        w_row_kwargs = kwargs.get('w_row_kwargs')
-        w_field_kwargs = kwargs.get('w_field_kwargs')
-        super(WidgetRowTitleElement, self).__init2__(**w_row_kwargs)
-
-        raw_data = w_row_kwargs.get('raw_data')
-        #print(self.__class__.__name__, "refresh_view_attrs", raw_data)
-
-        for j, v in enumerate(raw_data):
-            if isinstance(v, int):
-                name = None
-                value = v
-            else:
-                name = v
-                value = None
-
-            kwargs = dict(col_idx=j, name=name, value=value, **w_field_kwargs)
-            w_field = self.create_field_element(**kwargs)
-            #print(self.__class__.__name__, "w_field", raw_data)
-            self.add_children_layout(self.CHILD_ELEM_DATA, w_field)
-
-        self.index = index
-
-        #print(self.__class__.__name__, rv.data[index])
-        return super(WidgetRowElement, self).refresh_view_attrs(
-            rv, index, data)
+    pass
+# class WidgetRowTitleElement(WidgetRowElement):
+#
+#     def refresh_view_attrs1(self, rv, index, data):
+#         ''' Catch and handle the view changes '''
+#         #print(self.__class__.__name__, rv, index, data)
+#
+#         kwargs = data
+#         w_row_kwargs = kwargs.get('w_row_kwargs')
+#         w_field_kwargs = kwargs.get('w_field_kwargs')
+#         super(WidgetRowTitleElement, self).__init2__(**w_row_kwargs)
+#
+#         # page_title = w_row_kwargs.get('title')   #[:2] value index filed, [2:] value bit field
+#         #
+#         # for row_data in page_title:
+#         #     print(self.__class__.__name__, "refresh_view_attrs", row_data)
+#         #     idx = row_data.idx
+#         #     if idx:
+#         #         idx_widget = WidgetRowIndexElement(idx)
+#         #         #self.add_layout(self.CHILD_ELEM_INDEX, idx_widget)
+#         #
+#         #     content_widget = WidgetRowDataElement()
+#         #     self.add_layout(self.CHILD_ELEM_DATA, content_widget)
+#         #     content = row_data.content
+#         #     line_space = sum(map(lambda x: x[1], content))
+#         #     for j, v in enumerate(content):
+#         #         # if isinstance(v, int):
+#         #         #     name = None
+#         #         #     value = v
+#         #         # else:
+#         #         #     name = v
+#         #         #     value = None
+#         #         name, space = v
+#         #         percent = space / line_space
+#         #         w_layout_kwargs = {'size_hint_x': percent}
+#         #
+#         #         kwargs = dict(col_idx=j, name=name, layout_kwargs=w_layout_kwargs, **w_field_kwargs)
+#         #         w_field = self.create_field_element(**kwargs)
+#         #         #print(self.__class__.__name__, "w_field", raw_data)
+#         #         self.add_children_layout(self.CHILD_ELEM_DATA, w_field)
+#
+#         self.index = index
+#
+#         #print(self.__class__.__name__, rv.data[index])
+#         return super(WidgetRowElement, self).refresh_view_attrs(
+#             rv, index, data)
 
 class SelectableRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
                                  RecycleBoxLayout):
@@ -443,25 +498,31 @@ class SelectableRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
 class WidgetPageContentBaseElement(RecycleView):
     pass
 
-class WidgetPageTitleElement(WidgetPageContentBaseElement):
+class WidgetPageContentTitleElement(WidgetPageContentBaseElement):
     pass
 
-class WidgetPageRowsElement(WidgetPageContentBaseElement):
+class WidgetPageContentDataElement(WidgetPageContentBaseElement):
     pass
 
 class WidgetPageElement(TabbedPanelItem):
     PAGE_LAYOUT_TABLE = {
-        Page.OBJECT_TABLE: {
-            'title': ("type", "address", "size", "instances", "report id"),
-            'class_row_elem': WidgetRowT1Element,
+        Page.OBJECT_TABLE: (
+            #'title': ("type", "address", "size", "instances", "report id"),
+        {'class_row_elem': WidgetRowT1Element,
             'class_field_elem': WidgetFieldT1Element,
-            'skip_name': True,
-            'skip_index': False,
-        },
-        'default': {
-            'class_row_elem': WidgetRowElement,
+            'skip_value': True},
+        { 'class_row_elem': WidgetRowT1Element,
+            'class_field_elem': WidgetFieldT1Element,
+            'skip_name':True}
+        ),
+        'default': (
+        {'class_row_elem': WidgetRowTitleElement,
             'class_field_elem': WidgetFieldElement,
-        }
+            'skip_value': True},
+        {'class_row_elem': WidgetRowElement,
+            'class_field_elem': WidgetFieldElement, },
+            #'skip_index': False,
+        )
     }
 
     (PAGE_CHILD_ELEM_TITLE, PAGE_CHILD_ELEM_CONTENT) = ('Title', 'Content')
@@ -507,16 +568,17 @@ class WidgetPageElement(TabbedPanelItem):
         return self.__parent_inst
 
     @classmethod
-    def layout_kwargs(cls, id, name=None):
+    def get_page_layout_kwargs(cls, id):
         if id in cls.PAGE_LAYOUT_TABLE.keys():
             layout_kwargs = cls.PAGE_LAYOUT_TABLE[id]
         else:
             layout_kwargs = cls.PAGE_LAYOUT_TABLE['default']
-
-        if name is not None:
-            return layout_kwargs.get(name, None)
-        else:
-            return layout_kwargs
+        #
+        # if name is not None:
+        #     return layout_kwargs.get(name, None)
+        # else:
+        #     return layout_kwargs
+        return layout_kwargs
 
     # def layout(self, name):
     #     if name in self.__layout.keys():
@@ -556,45 +618,54 @@ class WidgetPageElement(TabbedPanelItem):
         #print(self.__class__.__name__, "to_tab_name", text)
         super(WidgetPageElement, self).__init__(text=text)
 
-    def create_rows_title_widget(self, page_mm, **kwargs):
-        rows_title_name = kwargs.get('name')
+    def create_page_content_title_widget(self, title_mm, layout_kwargs):
 
-        #row_mm = page_mm.row(0) #title use first row as element
-        row_kwargs = {'w_row_kwargs': dict(page_id=self.id(), row_idx=-1, raw_data=rows_title_name),
-                        'w_field_kwargs': dict(skip_value=True)}
+        data = []
+        for i, row_mm in enumerate(title_mm):
+            row_kwargs = {'w_row_kwargs': dict(page_id=self.id(), row_idx=-1, row_mm=row_mm),
+                          'w_field_kwargs': dict(skip_value=True)}
+            # print(self.__class__.__name__, row_kwargs)
+            data.append(row_kwargs)
 
-        root = WidgetPageTitleElement()
-        setattr(root, 'data', [row_kwargs])
+        root = WidgetPageContentTitleElement()
+        #setattr(root, 'data', [row_kwargs])
+        setattr(root, 'data', data)
         setattr(root, 'viewclass', WidgetRowTitleElement)
-        self.add_layout(self.PAGE_CHILD_ELEM_TITLE, root)
+        #self.add_layout(self.PAGE_CHILD_ELEM_TITLE, root)
+        return root
 
-    def create_rows_widget(self, page_mm, layout_kwargs):
-
-        skip_index = layout_kwargs.get('skip_index', True)
+    def create_page_content_data_widget(self, page_mm, layout_kwargs):
+        skip_value = layout_kwargs.get('skip_value', False)
         skip_name = layout_kwargs.get('skip_name', False)
         class_row_elem = layout_kwargs.get('class_row_elem')
         class_field_elem = layout_kwargs.get('class_field_elem')
 
         data = []
         for i, row_mm in enumerate(page_mm):
-            row_kwargs = {'w_row_kwargs': dict(page_id=self.id(), row_idx=i, skip_index=skip_index, row_mm=row_mm, layout_kwargs=dict()),
-                            'w_field_kwargs': dict(skip_name=skip_name, class_field_elem=class_field_elem)}
+            row_kwargs = {'w_row_kwargs': dict(page_id=self.id(), row_idx=i, row_mm=row_mm, layout_kwargs=dict()),
+                            'w_field_kwargs': dict(skip_name=skip_name, skip_value=skip_value, class_field_elem=class_field_elem)}
             #print(self.__class__.__name__, row_kwargs)
             data.append(row_kwargs)
 
-        root = WidgetPageRowsElement()
+        root = WidgetPageContentDataElement()
         setattr(root, 'data', data)
         setattr(root, 'viewclass', class_row_elem)
-        self.add_layout(self.PAGE_CHILD_ELEM_CONTENT, root)
+        #self.add_layout(self.PAGE_CHILD_ELEM_CONTENT, root)
+        return root
 
     def create_page_content_widget(self, page_mm):
-        title = WidgetPageElement.layout_kwargs(self.id(), 'title')
-        if title:
-            #print(self.__class__.__name__, "create_page_content_widget", title)
-            widget = self.create_rows_title_widget(page_mm, name=title)
+        # title = WidgetPageElement.layout_kwargs(self.id(), 'title')
+        # if title:
+        #     #print(self.__class__.__name__, "create_page_content_widget", title)
+        #     widget = self.create_rows_title_widget(page_mm, name=title)
+        title_kwargs, data_kwargs = WidgetPageElement.get_page_layout_kwargs(self.id())
 
-        layout_kwargs = WidgetPageElement.layout_kwargs(self.id())
-        self.create_rows_widget(page_mm, layout_kwargs=layout_kwargs)
+        if page_mm.title:
+            widget = self.create_page_content_data_widget(page_mm.title, layout_kwargs=title_kwargs)
+            self.add_layout(self.PAGE_CHILD_ELEM_TITLE, widget)
+
+        widget = self.create_page_content_data_widget(page_mm, layout_kwargs=data_kwargs)
+        self.add_layout(self.PAGE_CHILD_ELEM_CONTENT, widget)
 
     def do_fresh(self, page_mm):
 
