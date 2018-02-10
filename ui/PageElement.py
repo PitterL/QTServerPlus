@@ -506,23 +506,20 @@ class WidgetPageContentDataElement(WidgetPageContentBaseElement):
 
 class WidgetPageElement(TabbedPanelItem):
     PAGE_LAYOUT_TABLE = {
-        Page.OBJECT_TABLE: (
+        Page.OBJECT_TABLE: {
             #'title': ("type", "address", "size", "instances", "report id"),
-        {'class_row_elem': WidgetRowT1Element,
-            'class_field_elem': WidgetFieldT1Element,
-            'skip_value': True},
-        { 'class_row_elem': WidgetRowT1Element,
-            'class_field_elem': WidgetFieldT1Element,
-            'skip_name':True}
-        ),
-        'default': (
-        {'class_row_elem': WidgetRowTitleElement,
-            'class_field_elem': WidgetFieldElement,
-            'skip_value': True},
-        {'class_row_elem': WidgetRowElement,
-            'class_field_elem': WidgetFieldElement, },
-            #'skip_index': False,
-        )
+            'default': {'class_row_elem': WidgetRowT1Element,
+                'class_field_elem': WidgetFieldT1Element,},
+            'title': {'skip_value': True},
+            'content': {'skip_name':True}
+        },
+
+        'default': {
+            'default':{'class_row_elem': WidgetRowTitleElement,
+                'class_field_elem': WidgetFieldElement},
+            'title':{ 'skip_value': True},
+            'content': {}
+        }
     }
 
     (PAGE_CHILD_ELEM_TITLE, PAGE_CHILD_ELEM_CONTENT) = ('Title', 'Content')
@@ -570,15 +567,16 @@ class WidgetPageElement(TabbedPanelItem):
     @classmethod
     def get_page_layout_kwargs(cls, id):
         if id in cls.PAGE_LAYOUT_TABLE.keys():
-            layout_kwargs = cls.PAGE_LAYOUT_TABLE[id]
+            kwargs = cls.PAGE_LAYOUT_TABLE[id]
         else:
-            layout_kwargs = cls.PAGE_LAYOUT_TABLE['default']
-        #
-        # if name is not None:
-        #     return layout_kwargs.get(name, None)
-        # else:
-        #     return layout_kwargs
-        return layout_kwargs
+            kwargs = cls.PAGE_LAYOUT_TABLE['default']
+
+        kwargs_t = kwargs['default'].copy()
+        kwargs_t.update(kwargs['title'])
+        kwargs_c = kwargs['default'].copy()
+        kwargs_c.update(kwargs['content'])
+
+        return kwargs_t, kwargs_c
 
     # def layout(self, name):
     #     if name in self.__layout.keys():
@@ -658,13 +656,13 @@ class WidgetPageElement(TabbedPanelItem):
         # if title:
         #     #print(self.__class__.__name__, "create_page_content_widget", title)
         #     widget = self.create_rows_title_widget(page_mm, name=title)
-        title_kwargs, data_kwargs = WidgetPageElement.get_page_layout_kwargs(self.id())
+        title_kwargs, content_kwargs = WidgetPageElement.get_page_layout_kwargs(self.id())
 
         if page_mm.title:
             widget = self.create_page_content_data_widget(page_mm.title, layout_kwargs=title_kwargs)
             self.add_layout(self.PAGE_CHILD_ELEM_TITLE, widget)
 
-        widget = self.create_page_content_data_widget(page_mm, layout_kwargs=data_kwargs)
+        widget = self.create_page_content_data_widget(page_mm, layout_kwargs=content_kwargs)
         self.add_layout(self.PAGE_CHILD_ELEM_CONTENT, widget)
 
     def do_fresh(self, page_mm):
@@ -834,7 +832,7 @@ if __name__ == '__main__':
 
             v_chip_id = array.array('B', [164, 24, 16, 170, 32, 20, 40])
             chip = ChipMemoryMap.get_chip_mmap(v_chip_id)
-            page_mmap = chip.get_mmap(Page.ID_INFORMATION)
+            page_mmap = chip.get_mem_map_tab(Page.ID_INFORMATION)
             root.create_page_element(page_mmap)
 
             v_block_info = array.array('B',
@@ -848,7 +846,7 @@ if __name__ == '__main__':
                    11, 59, 0, 18, 101, 23, 12, 29, 0, 0, 104, 53, 12, 10, 0, 0, 108, 64, 12, 74, 0, 1, 109, 139, 12, 8,
                    0, 1, 111, 148, 12, 26, 2, 0, 112, 229, 12, 4, 1, 1, 113, 239, 12, 2, 0, 0])
 
-            page_mmap = chip.get_mmap(Page.OBJECT_TABLE)
+            page_mmap = chip.get_mem_map_tab(Page.OBJECT_TABLE)
             page_mmap.set_values(v_block_info)
             root.create_page_element(page_mmap)
 
@@ -863,7 +861,7 @@ if __name__ == '__main__':
                 return result
 
             chip.create_default_mmap_pages()
-            all_page_mmaps = chip.get_mmap()
+            all_page_mmaps = chip.get_mem_map_tab()
             for mmap in sorted(all_page_mmaps.values(), key=sort_key):
                 page_id = mmap.id()
                 widget = root.get_element(page_id)

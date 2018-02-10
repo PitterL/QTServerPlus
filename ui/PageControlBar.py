@@ -2,7 +2,6 @@ from kivy.uix.actionbar import ActionBar
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from ui.PageElement import PageElementRoot
-from ui.PageMessage import PageMessageRoot
 
 class UpControlBar(ActionBar):
     pass
@@ -23,5 +22,5 @@ class RightControlBar(Button):
 class CenterContentBar(PageElementRoot):
     pass
 
-class CenterMessageBar(PageMessageRoot):
+class CenterMessageBar(Button):
     pass

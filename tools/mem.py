@@ -3,6 +3,7 @@ import struct
 import array
 import ctypes
 import re, json
+from functools import partial
 
 from server.devinfo import Page, ObjectTableElement
 
@@ -230,11 +231,11 @@ class PageElementMmap(object):
             return self.content[key]
 
     class PageDesc(object):
-        def __init__(self, row_title_content=None):
+        def __init__(self, row_title=None):
             self.title_content = []
             self.row_content = []
-            if row_title_content:
-                self.add_title(*row_title_content)
+            if row_title:
+                self.add_title(*row_title)
 
         def __iter__(self):
             # print(self.__class__.__name__, self.__rows_mm)
@@ -243,8 +244,14 @@ class PageElementMmap(object):
         def __getitem__(self, key):
             return self.row_content[key]
 
+        def __len__(self):
+            return len(self.row_content)
+
         def title(self):
             return self.title_content
+
+        def content(self):
+            return self.row_content
 
         def row(self):
             return self.row_content
@@ -269,7 +276,7 @@ class PageElementMmap(object):
             r = cls_row_elem(row_title_desc)
             self.title.append(r)
 
-        for row_desc in page_desc:
+        for row_desc in page_desc.content():
             r = cls_row_elem(row_desc)
             self.__rows_mm.append(r)
 
@@ -279,7 +286,7 @@ class PageElementMmap(object):
         #print(self.__class__.__name__, "init", self)
 
     def __str__(self):
-        return super(PageElementMmap, self).__str__() + "page id {}, inst {}".format(self.id(), self.parent_inst())
+        return super(PageElementMmap, self).__str__() + "id {}, inst {}".format(self.id(), self.parent_inst())
 
     def __iter__(self):
         #print(self.__class__.__name__, self.__rows_mm)
@@ -288,18 +295,21 @@ class PageElementMmap(object):
     def __getitem__(self, key):
         return self.__rows_mm[key]
 
+    def __len__(self):
+        return len(self.__rows_mm)
+
     def valid(self):
         return self.__values is not None
 
     def id(self):
         return self.__id
 
-    def instance_id(self):
-        if isinstance(self.id(), tuple):
-            return self.id()[-1]
+    # def instance_id(self):
+    #     if isinstance(self.id(), tuple):
+    #         return self.id()[-1]
 
     def parent_inst(self):
-        return 0
+         return -1
 
     def set_values(self, values):
         self.__values = values
@@ -378,6 +388,9 @@ class Page0Mem(PageElementMmap):
 
         super(Page0Mem, self).__init__(self.PAGE_ID, desc, values, RowElement)
 
+    def parent_inst(self):
+        return -1
+
 class Page1Mem(PageElementMmap):
     PAGE_ID = Page.OBJECT_TABLE
     ROW_MMAP = (
@@ -394,38 +407,48 @@ class Page1Mem(PageElementMmap):
         #self.Mmap * object_num
         super(Page1Mem, self).__init__(self.PAGE_ID, desc, values, RowElementByte)
 
+    def parent_inst(self):
+        return -1
+
 class Page2Mem(PageElementMmap):
 
     def __init__(self, page_id, parent_inst, desc, values=None):
-        self.__parent_inst = parent_inst
+        self._parent_inst = parent_inst
         #desc = self.load_page_desc(page_id, parent_inst, size)
         super(Page2Mem, self).__init__(page_id, desc, values, RowElement)
 
     def parent_inst(self):
-        return self.__parent_inst
+        return self._parent_inst
 
-    # def load_page_desc(self, page_id, parent_inst, size):
-    #     #print(self.__class__.__name__, page_id, parent_inst, size)
-    #     desc = ((('TBD', 8),),) * size
-    #     return desc
+class PageMessageMap(PageElementMmap):
+
+    def __init__(self, page_id, report_id, desc):
+        super(PageMessageMap, self).__init__(report_id, desc, None, RowElement)
+        self.page_id = page_id
 
 class PagesMemoryMap(object):
+    PATTERN_CONFIG_TABLE_NAME = re.compile("Configuration for [A-Z_]+(\d+)( Instance (\d))?")
+    PATTERN_MESSAGE_TABLE_NAME = re.compile("Message Data for [A-Z_]+(\d+)( – (.*))?")
+    MESSAGE_EXTRA_INFO_TABLE = {100: ["First Report ID", "Second Report ID", "Subsequent Touch Report IDs"]}
+
     def __init__(self, chip_id, product_doc=None):
-        self.mmap_table = OrderedDict()
-        self._doc = product_doc
+        self.mem_map = OrderedDict()
+        self.msg_map = dict()
+        self.reg_report_table = OrderedDict()   #store report id range for each reg
+        self._doc = product_doc #Fixme: product doc has some bugs of splitted rows
 
         #build page 0 memory map table
         mmem = Page0Mem(chip_id)
-        self.set_mmap(mmem)
+        self.set_mem_map(mmem)
 
         #build page 1 memory map table
         object_num = mmem.search('object_num')
         if object_num:
             mmem = Page1Mem(object_num)
-            self.set_mmap(mmem)
+            self.set_mem_map(mmem)
 
     def inited(self):
-        return len(self.mmap_table) > 2 #has get object table
+        return len(self.mem_map) > 2 #has get object table
 
     def build_default_desc(self, size):
         desc = PageElementMmap.PageDesc(None)
@@ -435,56 +458,131 @@ class PagesMemoryMap(object):
 
         return desc
 
-    def load_page_desc(self, page_id, parent_inst, size):
-        pat_name = re.compile("Configuration for [A-Z_]+(\d+)( Instance (\d))?")
-        to_row_content = lambda row_value: (row_value[:2], row_value[2:])
-        reg_id, inst_id = page_id
-        for k, v in self._doc.items():
-            result = pat_name.match(k)
-            if result is not None:
-                if str(reg_id) == result.group(1):
-                    if not result.group(3) or str(inst_id) == result.group(3):
-                        print("Found desc:", k)
-                        if len(v) != size + 1:
-                            print("desc size mismatch(%d) (%d):" %(size, len(v)), v)
-                            break
+    def _parse_desc(self, table_items, size, fn_check_result, pat_name):
+        split_row_content = lambda row_value: (row_value[:2], row_value[2:])
+        get_row_id = lambda idx: idx[0][0]
+        get_elem_length = lambda elem: sum(map(lambda e: e[1], elem))
 
-                        desc = PageElementMmap.PageDesc(to_row_content(v[0]))
-                        for i in range(1, len(v)):
-                            idx, elem = to_row_content(v[i])
-                            length = sum(map(lambda e: e[1], elem))
-                            if length != 8:
-                                print("Skip not integrity desc:", elem)
-                                elem = (('TBD', 8),)
-                            desc.add_content(idx, elem)
-                        print(desc)
-                        return desc
+        for k, v in table_items:
+            result = pat_name.match(k)
+            if fn_check_result(result):
+                print("Found desc:", k)
+                row_title = split_row_content(v[0])
+                desc = PageElementMmap.PageDesc(row_title)
+                length_row_title = get_elem_length(row_title[1])
+                for i in range(1, len(v)):
+                    idx, elem = split_row_content(v[i])
+                    length = get_elem_length(elem)
+                    if length != length_row_title:
+                        print("Skip not integrity desc:", v[i])
+                        elem = (('TBD', 8),)
+                    row_id = get_row_id(idx)
+                    result = re.split('[–-]', row_id)
+                    if len(result) > 1:
+                        try:
+                            st, end = map(int, result)
+                            for id in range(st, end + 1):
+                                desc.add_content(id, elem)
+                        except:
+                            print("Falied split row id:", v[i])
+                            break
+                    else:
+                        desc.add_content(idx, elem)
+
+                if size is not None:
+                    if len(desc) != size:
+                        print("desc size mismatch(%d) (%d):" %(size, len(desc)), v)
+                        break
+
+                return desc
 
         #print(self.__class__.__name__, page_id, parent_inst, size)
         #desc = ((('TBD', 8),),) * size
-        desc = self.build_default_desc(size)
+
+    def load_page_mem_desc(self, page_id, parent_inst, size):
+        def check_result(reg_id, inst_id, result):
+            if not result:
+                return
+
+            if str(reg_id) == result.group(1):
+                einfo = str(inst_id)
+                if not einfo or einfo == result.group(3):
+                    return True
+
+        reg_id, inst_id = page_id
+        fn_check_result = partial(check_result, reg_id, inst_id)
+        desc = self._parse_desc(self._doc.items(), size, fn_check_result, self.PATTERN_CONFIG_TABLE_NAME)
+        if not desc:
+            desc = self.build_default_desc(size)
         return desc
 
-    def set_mmap(self, mmem):
-        #print(self.__class__.__name__, "set_mmap", mmem)
-        self.mmap_table[mmem.id()] = mmem
+    def load_page_msg_desc(self, page_id, rrid, default_size):
+        def get_extra_info(table, reg_id, rrid):
+            if reg_id in table.keys():
+                info = table[reg_id]
+                if rrid < len(info):
+                    return info[rrid]
+                else:
+                    return info[-1]
 
-    def get_mmap(self, page_id=None):
+        def check_result(reg_id, rrid, result):
+            if not result:
+                return
+
+            if str(reg_id) == result.group(1):
+                einfo = get_extra_info(self.MESSAGE_EXTRA_INFO_TABLE, reg_id, rrid)
+                if not einfo or einfo == result.group(3):
+                    return True
+
+        reg_id, inst_id = page_id
+        fn_check_result = partial(check_result, reg_id, rrid)
+        desc = self._parse_desc(self._doc.items(), None, fn_check_result, self.PATTERN_MESSAGE_TABLE_NAME)
+        if not desc:
+            print("No found message desc for page {} report_id {}".format(page_id, rrid))
+            desc = self.build_default_desc(default_size)
+        return desc
+
+    def set_mem_map(self, mmem):
+        #print(self.__class__.__name__, "set_mem_map", mmem)
+        self.mem_map[mmem.id()] = mmem
+
+    def get_mem_map_tab(self, page_id=None):
         if page_id is not None:
-            if page_id in self.mmap_table.keys():
-                return self.mmap_table[page_id]
+            if page_id in self.mem_map.keys():
+                return self.mem_map[page_id]
         else:
-            return self.mmap_table
+            return self.mem_map
+
+    def set_msg_map(self, mmsg):
+        # print(self.__class__.__name__, "set_mem_map", mmem)
+        self.msg_map[mmsg.id()] = mmsg
+
+    def set_reg_reporter(self, reg_id, report_range):
+        self.reg_report_table[reg_id] = report_range
+
+    def get_reg_reporer(self, reg_id=None):
+        if reg_id is not None:
+            if reg_id in self.reg_report_table.keys():
+                return self.reg_report_table[reg_id]
+        else:
+            return self.reg_report_table
+
+    def get_msg_map_tab(self, page_id=None):
+        if page_id is not None:
+            if page_id in self.msg_map.keys():
+                return self.msg_map[page_id]
+        else:
+            return self.msg_map
 
     def create_default_mmap_pages(self):
         if self.inited():
             return
 
-        page0_mmap = self.get_mmap(Page.ID_INFORMATION)
+        page0_mmap = self.get_mem_map_tab(Page.ID_INFORMATION)
         if not page0_mmap:
             return
 
-        page1_mmap = self.get_mmap(Page.OBJECT_TABLE)
+        page1_mmap = self.get_mem_map_tab(Page.OBJECT_TABLE)
         if not page1_mmap:
             return
 
@@ -493,16 +591,27 @@ class PagesMemoryMap(object):
         object_num = page0_mmap.search('object_num')
         if object_num:
             data = page1_mmap.raw_values()
+            repo_st = 0
             for n in range(object_num):
                 #print(self.__class__.__name__, data[n * esize: (n + 1) * esize])
                 element = ObjectTableElement(*struct.unpack_from("<BHBBB", data[n * esize: (n + 1) * esize]))
                 inst = element.instances_minus_one + 1
+                num_repo = element.num_report_ids
+                self.set_reg_reporter(element.type, range(repo_st, num_repo * inst))
                 for i in range(inst):
                     page_id = (element.type, i)
                     size = element.size_minus_one + 1
-                    desc = self.load_page_desc(page_id, inst, size)
+                    desc = self.load_page_mem_desc(page_id, inst, size)
                     mmem = Page2Mem(page_id, inst, desc)
-                    self.set_mmap(mmem)
+                    self.set_mem_map(mmem)
+                    if num_repo:
+                        report_id = (repo_st, repo_st + num_repo)
+                        repo_st += num_repo
+                        msg_reg = self.get_mem_map_tab((5, 0))
+                        for j in range(num_repo):
+                            desc = self.load_page_msg_desc(page_id, j, len(msg_reg))
+                            mmsg = PageMessageMap(page_id, report_id, desc)
+                            self.set_msg_map(mmsg)
 
 class ChipMemoryMap(object):
     CHIP_TABLE = {}

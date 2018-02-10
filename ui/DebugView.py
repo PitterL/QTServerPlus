@@ -764,7 +764,7 @@ class DebugView(FloatLayout):
         print('The key', scancode, 'have been pressed')
         print(' - text is %r' % text)
         print(' - modifiers are %r' % modifiers)
-        if scancode == 100 and modifiers == ['ctrl']:
+        if scancode == 100 and modifiers == ['ctrl']:   #ctrl + d
             print(self.__class__.__name__, self.activated)
             self.activated = not self.activated
             return True

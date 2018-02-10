@@ -14,6 +14,7 @@ from tools.mem import ChipMemoryMap
 #from ui.PageControlBar import UpControlBar, DownControlBar, LeftControlBar, RightControlBar, CenterContentBar
 
 from ui.DebugView import DebugView
+from ui.MessageView import MessageView
 
 class WinError(Exception):
     "Message error exception class type"
@@ -35,6 +36,7 @@ class DeviceWindow(BoxLayout):
 
         self._center = self.ids[DeviceWindow.CENTER_CONTENT_BAR]
         self._dbg_view = DebugView.register_debug_view()
+        self._msg_view = MessageView.register_message_view()
 
     def __str__(self):
         return super(DeviceWindow, self).__str__() + '(' + self.id() + ')'
@@ -88,7 +90,7 @@ class DeviceWindow(BoxLayout):
 
         #print(self.__class__.__name__, self.chip, "create page {}".format(page_id))
 
-        page_mm = self.chip.get_mmap(page_id)
+        page_mm = self.chip.get_mem_map_tab(page_id)
         if page_mm:
             widget = self._center.create_page_element(page_mm)
             widget.bind(on_press=self.on_page_selected)
@@ -108,7 +110,7 @@ class DeviceWindow(BoxLayout):
             return
 
         self.chip.create_default_mmap_pages()
-        all_page_mmaps = self.chip.get_mmap()
+        all_page_mmaps = self.chip.get_mem_map_tab()
         for mmap in sorted(all_page_mmaps.values(), key=sort_key):
             page_id = mmap.id()
             widget = self.get_element(page_id)
@@ -117,6 +119,7 @@ class DeviceWindow(BoxLayout):
                 #print(self.__class__.__name__, "create_page_element", widget)
 
         self._center.set_default_element(Page.ID_INFORMATION)
+        self._msg_view.create_message_element(self.chip.get_reg_reporter())
 
     def distory_page_element(self):
         self.clear_elements()
@@ -132,7 +135,7 @@ class DeviceWindow(BoxLayout):
 
         if widget:
             #print(self.__class__.__name__, "update", widget, page_cache.buf())
-            page_mm = self.chip.get_mmap(page_id)
+            page_mm = self.chip.get_mem_map_tab(page_id)
             if page_mm:
                 page_mm.set_values(page_cache.buf())
                 widget.do_fresh(page_mm)
@@ -141,7 +144,7 @@ class DeviceWindow(BoxLayout):
         print(self.__class__.__name__, "on_page_selected", instance)
 
         page_id = instance.selected_id()
-        page_mm = self.chip.get_mmap(page_id)
+        page_mm = self.chip.get_mem_map_tab(page_id)
         if not page_mm:
             return
 
@@ -189,7 +192,14 @@ class DeviceWindow(BoxLayout):
         self.handle_dbg_msg(data)
 
     def handle_interrupt_data_msg(self, data):
-        self.handle_dbg_msg(data)
+        assert (self.chip, data)
+
+        report_id = data[0]
+        msg_mm = self.chip.get_msg_map_tab(report_id)
+        msg_mm.set_values(data)
+
+        if self._msg_view:
+            self._msg_view.handle_data(msg_mm)
 
     def hand_nak_msg(self, msg):
         print(self.__class__.__name__, "NAK: ", msg)
