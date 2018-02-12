@@ -96,7 +96,11 @@ class DeviceWindow(BoxLayout):
             widget.bind(on_press=self.on_page_selected)
             return widget
 
-    def create_default_pages_element(self):
+    def create_msg_view_element(self, page_id):
+        report_table = self.chip.get_reg_reporer()
+        #self._msg_view.create_message_element(page_id)
+
+    def create_chip_pages_element(self):
         def sort_key(mm):
             major, inst = mm.id()
             if isinstance(major, str):
@@ -109,7 +113,7 @@ class DeviceWindow(BoxLayout):
         if not self.chip:
             return
 
-        self.chip.create_default_mmap_pages()
+        self.chip.create_chip_mmap_pages()
         all_page_mmaps = self.chip.get_mem_map_tab()
         for mmap in sorted(all_page_mmaps.values(), key=sort_key):
             page_id = mmap.id()
@@ -119,16 +123,15 @@ class DeviceWindow(BoxLayout):
                 #print(self.__class__.__name__, "create_page_element", widget)
 
         self._center.set_default_element(Page.ID_INFORMATION)
-        self._msg_view.create_message_element(self.chip.get_reg_reporter())
 
     def distory_page_element(self):
         self.clear_elements()
 
     def update_page_element(self, page_cache):
-        if not self.chip:
+        page_id = page_cache.id()
+        if not self.chip and page_id == Page.ID_INFORMATION:
             self.create_chip(page_cache)
 
-        page_id = page_cache.id()
         widget = self._center.get_element(page_id)
         if not widget:
             widget = self.create_page_element(page_id)
@@ -179,7 +182,8 @@ class DeviceWindow(BoxLayout):
             command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
             self.prepare_command(command)
         elif page_id == Page.OBJECT_TABLE:
-            self.create_default_pages_element()
+            self.create_chip_pages_element()
+            self.create_msg_view_element(page_id)
 
     def handle_page_write_msg(self, data):
         self.ids["message"] == "Page write: {}".format(data)
@@ -192,12 +196,17 @@ class DeviceWindow(BoxLayout):
         self.handle_dbg_msg(data)
 
     def handle_interrupt_data_msg(self, data):
-        assert (self.chip, data)
+        if not self.chip:
+            print(self.__class__.__name__, "chip is removed with interrupt data:", data)
+            return
 
         report_id = data[0]
         msg_mm = self.chip.get_msg_map_tab(report_id)
-        msg_mm.set_values(data)
+        if not msg_mm:
+            print(self.__class__.__name__, "unknown report id ", report_id)
+            return
 
+        msg_mm.set_values(data)
         if self._msg_view:
             self._msg_view.handle_data(msg_mm)
 

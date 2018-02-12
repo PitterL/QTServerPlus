@@ -564,26 +564,28 @@ if __name__ == '__main__':
         output = sys.stdout
     try:
         hid_bus = Hid_Bus()
-        devices = hid_bus.show_hids(0x03eb, 0x6123, output = output)
-        print("Found HID class devices!, writting details...")
-        if devices:
-            print("Found HID class devices!, writting details...")
-            for dev in devices:
-                device_name = str(dev)
-                output.write(device_name)
-                output.write('\n\n  Path:      %s\n' % dev.device_path)
-                output.write('\n  Instance:  %s\n' % dev.instance_id)
-                output.write('\n  Port (ID): %s\n' % dev.get_parent_instance_id())
-                output.write('\n  Port (str):%s\n' % str(dev.get_parent_device()))
-                #
-                try:
-                    dev.open()
-                    tools.write_documentation(dev, output)
-                finally:
-                    dev.close()
-            print("done!")
-        else:
-            print("There's not any non system HID class device available")
+        for usbid in Hid_Device.VID_PID_LIST:
+            print("check vid=%x pid=%x" %usbid)
+            devices = hid_bus.show_hids(usbid, output = output)
+            if devices:
+                print("Found HID class devices!, writting details...")
+                for dev in devices:
+                    device_name = str(dev)
+                    output.write(device_name)
+                    output.write('\n\n  Path:      %s\n' % dev.device_path)
+                    output.write('\n  Instance:  %s\n' % dev.instance_id)
+                    output.write('\n  Port (ID): %s\n' % dev.get_parent_instance_id())
+                    output.write('\n  Port (str):%s\n' % str(dev.get_parent_device()))
+                    #
+                    try:
+                        dev.open()
+                        tools.write_documentation(dev, output)
+                    finally:
+                        dev.close()
+                print("done!")
+                break
+            else:
+                print("There's not any non system HID class device available")
 
     except UnicodeEncodeError:
         print("\nError: Can't manage encodings on terminal, try to run the script on PyScripter or IDLE")

@@ -1,0 +1,43 @@
+<WidgetFieldToggleName>:
+    canvas.before:
+        Color:
+            rgba: (0.8, 0.9, 1.0, 0.3) if self.state == 'down' else (0, 0, 0, 0)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    background_normal: 'atlas://data/images/defaulttheme/bubble_btn'
+    background_down: 'atlas://data/images/defaulttheme/bubble_btn_pressed'
+    background_disabled_normal: 'atlas://data/images/defaulttheme/bubble_btn'
+    background_disabled_down: 'atlas://data/images/defaulttheme/bubble_btn_pressed'
+    border: (0, 0, 0, 0)
+
+<WidgetBubbleElement>:
+    #height: self.minimum_height
+    #BoxLayout:
+    #    id: content
+    #    orientation:'vertical'
+    orientation:'vertical'
+
+<WidgetBubbleRoot>
+    size_hint_y: None
+    #size_x: 0.2
+    arrow_pos: 'top_mid'
+
+<ReporterButton>
+    size_hint: (None, None)
+    size: 10, 5
+
+<MessageView>
+    WidgetBubbleRoot:
+        id: bubb
+        pos_hint: {'x':.0, 'y':.2}
+        size_hint_y: 0.8
+    GridLayout:
+        id: control
+        cols: 16
+        #orientation:'vertical'
+        size_hint_y: 0.1
+        height: 50
+    BoxLayout:
+        id: data
+        orientation:'vertical'

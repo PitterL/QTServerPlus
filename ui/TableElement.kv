@@ -1,0 +1,81 @@
+#:import OpacityScrollEffect kivy.effects.opacityscroll.OpacityScrollEffect
+<WidgetPageContentBaseElement>:
+    effect_cls:OpacityScrollEffect
+    #viewclass: 'WidgetRowElement'
+    SelectableRecycleBoxLayout:
+        default_size: None, dp(56)
+        default_size_hint: 1, None
+        size_hint_y: None
+        height: self.minimum_height
+        orientation: 'vertical'
+        #multiselect: True
+        #touch_multiselect: True
+
+<WidgetPageContentTitleElement>
+    size_hint_y: None
+    height: 100
+
+<WidgetPageContentDataElement>
+
+<WidgetRowTitleElement>
+
+<WidgetRowElement>:
+    size_hint_y: None
+    height: 35
+    orientation: 'horizontal'
+    # Draw a background to indicate selection
+
+<WidgetRowIndexElement>
+    size_hint: 0.07, 1
+    #size_hint: 0.3, 0.99
+    #width: 15
+    #height: 35
+
+<WidgetFieldIndexElement>
+    #font_size: 12
+    shorten: True
+    shorten_from: 'right'
+    text_size: self.width, None
+    #bold: True
+    #valign: 'center'
+
+<WidgetRowDataElement>
+    size_hint: 0.93, 1
+    #size_hint_y: 0.99
+    #height: 35
+    orientation: 'horizontal'
+
+<WidgetFieldElement>:
+    orientation:'vertical'
+
+<WidgetFieldLabelBase>:
+    #max_lines: 1
+    #strip:True
+    text_size: self.size
+    halign: 'center'
+
+<WidgetFieldLabelName>:
+    id: name
+    valign: 'top'
+    #bold: True
+    #outline_width: 1
+    #outline_color: 0.7, 0.8, 0.3, 0.5
+    canvas.before:
+        Color:
+            rgba: 1, 1, 0.0, 0.7
+        Rectangle:
+            # self here refers to the widget i.e BoxLayout
+            pos: self.pos
+            size: self.size
+
+<WidgetFieldLabelValue>:
+    id: value
+    valign: 'middle'
+    #max_lines: 1
+    canvas.before:
+        Color:
+            rgba: 1, 1, 0.3, 0.2
+        Rectangle:
+            # self here refers to the widget i.e BoxLayout
+            pos: self.pos
+            size: self.size

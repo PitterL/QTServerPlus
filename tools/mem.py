@@ -2,7 +2,7 @@ from collections import OrderedDict
 import struct
 import array
 import ctypes
-import re, json
+import os, re, json
 from functools import partial
 
 from server.devinfo import Page, ObjectTableElement
@@ -30,7 +30,7 @@ class RowElement(object):
         self.fields = OrderedDict()
         self.seq_rsv = 0
         self._pos = 0   #store filed relative pos in initilize
-        self.value_size = self.MAX_FIELD_SIZE / 8
+        self.value_size = self.MAX_FIELD_SIZE // 8
 
         for n, v in self.content:
             self.add_field(n, v)
@@ -270,6 +270,7 @@ class PageElementMmap(object):
         self.title = []
         self.__rows_mm = []
         self.__values = None
+        self.value_size = 0
         #self.title = page_desc.title()
 
         for row_title_desc in page_desc.title():
@@ -279,6 +280,7 @@ class PageElementMmap(object):
         for row_desc in page_desc.content():
             r = cls_row_elem(row_desc)
             self.__rows_mm.append(r)
+            self.value_size += r.get_value_size()
 
         if values:
             self.set_values(values)
@@ -298,9 +300,6 @@ class PageElementMmap(object):
     def __len__(self):
         return len(self.__rows_mm)
 
-    def valid(self):
-        return self.__values is not None
-
     def id(self):
         return self.__id
 
@@ -311,8 +310,17 @@ class PageElementMmap(object):
     def parent_inst(self):
          return -1
 
+    def valid(self):
+        return self.__values is not None
+
+    def get_value_size(self):
+        return self.value_size
+
     def set_values(self, values):
-        self.__values = values
+        assert len(values) == self.value_size, \
+            "values length mismatch({} {}):({})".format(len(values), self.value_size, values)
+
+        self.__values = values[:self.value_size]
         for i, row_elem in enumerate(self.__rows_mm):
             size = row_elem.get_value_size()
             if size * (i + 1) > len(values):
@@ -430,6 +438,7 @@ class PagesMemoryMap(object):
     PATTERN_CONFIG_TABLE_NAME = re.compile("Configuration for [A-Z_]+(\d+)( Instance (\d))?")
     PATTERN_MESSAGE_TABLE_NAME = re.compile("Message Data for [A-Z_]+(\d+)( – (.*))?")
     MESSAGE_EXTRA_INFO_TABLE = {100: ["First Report ID", "Second Report ID", "Subsequent Touch Report IDs"]}
+    SIZE_ROW_IDX_ELEM = 2
 
     def __init__(self, chip_id, product_doc=None):
         self.mem_map = OrderedDict()
@@ -458,31 +467,35 @@ class PagesMemoryMap(object):
 
         return desc
 
-    def _parse_desc(self, table_items, size, fn_check_result, pat_name):
-        split_row_content = lambda row_value: (row_value[:2], row_value[2:])
-        get_row_id = lambda idx: idx[0][0]
-        get_elem_length = lambda elem: sum(map(lambda e: e[1], elem))
+    def _parse_desc(self, table, size, fn_check_result, pat_name):
+        if not table:
+            return
 
-        for k, v in table_items:
+        split_row_content = lambda row_value: (row_value[:self.SIZE_ROW_IDX_ELEM], row_value[self.SIZE_ROW_IDX_ELEM:])
+        get_row_id = lambda idx: idx[0]
+        get_data_elem_length = lambda elem: sum(map(lambda e: e[1], elem))
+
+        for k, v in table.items():
             result = pat_name.match(k)
             if fn_check_result(result):
                 print("Found desc:", k)
-                row_title = split_row_content(v[0])
-                desc = PageElementMmap.PageDesc(row_title)
-                length_row_title = get_elem_length(row_title[1])
+                title = split_row_content(v[0])
+                desc = PageElementMmap.PageDesc(title)
+                length_row_title = get_data_elem_length(title[1])
                 for i in range(1, len(v)):
                     idx, elem = split_row_content(v[i])
-                    length = get_elem_length(elem)
+                    length = get_data_elem_length(elem)
                     if length != length_row_title:
                         print("Skip not integrity desc:", v[i])
                         elem = (('TBD', 8),)
                     row_id = get_row_id(idx)
-                    result = re.split('[–-]', row_id)
+                    result = re.split('[–-]', row_id[0])
                     if len(result) > 1:
                         try:
                             st, end = map(int, result)
                             for id in range(st, end + 1):
-                                desc.add_content(id, elem)
+                                idx_new = [(str(id), row_id[1])].extend(idx[1:])
+                                desc.add_content(idx_new, elem)
                         except:
                             print("Falied split row id:", v[i])
                             break
@@ -505,13 +518,13 @@ class PagesMemoryMap(object):
                 return
 
             if str(reg_id) == result.group(1):
-                einfo = str(inst_id)
-                if not einfo or einfo == result.group(3):
+                einfo = result.group(3)
+                if not einfo or einfo == str(inst_id):
                     return True
 
         reg_id, inst_id = page_id
         fn_check_result = partial(check_result, reg_id, inst_id)
-        desc = self._parse_desc(self._doc.items(), size, fn_check_result, self.PATTERN_CONFIG_TABLE_NAME)
+        desc = self._parse_desc(self._doc, size, fn_check_result, self.PATTERN_CONFIG_TABLE_NAME)
         if not desc:
             desc = self.build_default_desc(size)
         return desc
@@ -536,7 +549,7 @@ class PagesMemoryMap(object):
 
         reg_id, inst_id = page_id
         fn_check_result = partial(check_result, reg_id, rrid)
-        desc = self._parse_desc(self._doc.items(), None, fn_check_result, self.PATTERN_MESSAGE_TABLE_NAME)
+        desc = self._parse_desc(self._doc, None, fn_check_result, self.PATTERN_MESSAGE_TABLE_NAME)
         if not desc:
             print("No found message desc for page {} report_id {}".format(page_id, rrid))
             desc = self.build_default_desc(default_size)
@@ -567,14 +580,14 @@ class PagesMemoryMap(object):
         else:
             return self.reg_report_table
 
-    def get_msg_map_tab(self, page_id=None):
-        if page_id is not None:
-            if page_id in self.msg_map.keys():
-                return self.msg_map[page_id]
+    def get_msg_map_tab(self, report_id=None):
+        if report_id is not None:
+            if report_id in self.msg_map.keys():
+                return self.msg_map[report_id]
         else:
             return self.msg_map
 
-    def create_default_mmap_pages(self):
+    def create_chip_mmap_pages(self):
         if self.inited():
             return
 
@@ -591,13 +604,14 @@ class PagesMemoryMap(object):
         object_num = page0_mmap.search('object_num')
         if object_num:
             data = page1_mmap.raw_values()
-            repo_st = 0
+            repo_st = 1
             for n in range(object_num):
                 #print(self.__class__.__name__, data[n * esize: (n + 1) * esize])
                 element = ObjectTableElement(*struct.unpack_from("<BHBBB", data[n * esize: (n + 1) * esize]))
                 inst = element.instances_minus_one + 1
                 num_repo = element.num_report_ids
-                self.set_reg_reporter(element.type, range(repo_st, num_repo * inst))
+                if num_repo:
+                    self.set_reg_reporter(element.type, range(repo_st, repo_st + num_repo * inst))
                 for i in range(inst):
                     page_id = (element.type, i)
                     size = element.size_minus_one + 1
@@ -605,13 +619,12 @@ class PagesMemoryMap(object):
                     mmem = Page2Mem(page_id, inst, desc)
                     self.set_mem_map(mmem)
                     if num_repo:
-                        report_id = (repo_st, repo_st + num_repo)
-                        repo_st += num_repo
                         msg_reg = self.get_mem_map_tab((5, 0))
                         for j in range(num_repo):
                             desc = self.load_page_msg_desc(page_id, j, len(msg_reg))
-                            mmsg = PageMessageMap(page_id, report_id, desc)
+                            mmsg = PageMessageMap(page_id, repo_st, desc)
                             self.set_msg_map(mmsg)
+                            repo_st += 1
 
 class ChipMemoryMap(object):
     CHIP_TABLE = {}
@@ -621,9 +634,13 @@ class ChipMemoryMap(object):
 
     @classmethod
     def get_datasheet(cls, chip_id):
-        name = "..\\db\\{:02x}_{:02x}_{:02x}.db".format(*chip_id[:3])
-        with open(name, 'r') as fp:
-            return json.load(fp)
+        name = "db\\{:02x}_{:02x}_{:02x}.db".format(*chip_id[:3])
+
+        for dir in ('.', '..'):
+            path = os.path.join(dir, name)
+            if os.path.exists(path):
+                with open(path, 'r') as fp:
+                    return json.load(fp)
 
     @classmethod
     def get_chip_mmap(cls, chip_id):
