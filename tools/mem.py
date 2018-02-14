@@ -25,21 +25,21 @@ class RowElement(object):
             return self.__str__()
 
     def __init__(self, row_desc):
-        self.idx = row_desc.idx
-        self.content = row_desc.content
+        self.idx_elems = row_desc.idx
+        self.content_elems = row_desc.content
         self.fields = OrderedDict()
         self.seq_rsv = 0
         self._pos = 0   #store filed relative pos in initilize
         self.value_size = self.MAX_FIELD_SIZE // 8
 
-        for n, v in self.content:
+        for n, v in self.content_elems:
             self.add_field(n, v)
 
         # for n, v in ele_d:
         #     self.add_field(n, v)
 
     def __str__(self):
-        return self.__class__.__name__ + str((self.idx, self.content))
+        return self.__class__.__name__ + str((self.idx_elems, self.content_elems))
 
     def __repr__(self):
         return '<' + self.__str__() + '>'
@@ -133,13 +133,13 @@ class RowElementByte(object):
             return self.__str__()
 
     def __init__(self, row_desc):
-        self.idx = row_desc.idx
-        self.content = row_desc.content
+        self.idx_elems = row_desc.idx
+        self.content_elems = row_desc.content
         self.fields = OrderedDict()
         self.pos = 0
         self.value_size = 0
 
-        for name, width in self.content:
+        for name, width in self.content_elems:
             self.add_field(name, width)
             self.value_size += width
 
@@ -407,6 +407,7 @@ class Page1Mem(PageElementMmap):
     PAGE_TITLE = ((('N',1),), ROW_MMAP)
 
     def __init__(self, object_num, values=None):
+        self.reg_report_table = OrderedDict()   #store report id range for each reg
         desc = PageElementMmap.PageDesc(self.PAGE_TITLE)
         for i in range(object_num):
             idx = (str(i), 1)
@@ -417,6 +418,17 @@ class Page1Mem(PageElementMmap):
 
     def parent_inst(self):
         return -1
+
+    def set_reg_reporter(self, reg_id, report_range):
+        self.reg_report_table[reg_id] = report_range
+
+    def get_reg_reporer(self, reg_id):
+        if reg_id is not None:
+            if reg_id in self.reg_report_table.keys():
+                return self.reg_report_table[reg_id]
+        else:
+            return self.reg_report_table
+
 
 class Page2Mem(PageElementMmap):
 
@@ -443,7 +455,6 @@ class PagesMemoryMap(object):
     def __init__(self, chip_id, product_doc=None):
         self.mem_map = OrderedDict()
         self.msg_map = dict()
-        self.reg_report_table = OrderedDict()   #store report id range for each reg
         self._doc = product_doc #Fixme: product doc has some bugs of splitted rows
 
         #build page 0 memory map table
@@ -570,15 +581,10 @@ class PagesMemoryMap(object):
         # print(self.__class__.__name__, "set_mem_map", mmem)
         self.msg_map[mmsg.id()] = mmsg
 
-    def set_reg_reporter(self, reg_id, report_range):
-        self.reg_report_table[reg_id] = report_range
-
     def get_reg_reporer(self, reg_id=None):
-        if reg_id is not None:
-            if reg_id in self.reg_report_table.keys():
-                return self.reg_report_table[reg_id]
-        else:
-            return self.reg_report_table
+        mmap = self.get_mem_map_tab(Page.OBJECT_TABLE)
+        if mmap:
+            return mmap.get_reg_reporer(reg_id)
 
     def get_msg_map_tab(self, report_id=None):
         if report_id is not None:
@@ -611,7 +617,7 @@ class PagesMemoryMap(object):
                 inst = element.instances_minus_one + 1
                 num_repo = element.num_report_ids
                 if num_repo:
-                    self.set_reg_reporter(element.type, range(repo_st, repo_st + num_repo * inst))
+                    page1_mmap.set_reg_reporter(element.type, range(repo_st, repo_st + num_repo * inst))
                 for i in range(inst):
                     page_id = (element.type, i)
                     size = element.size_minus_one + 1

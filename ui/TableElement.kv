@@ -1,5 +1,5 @@
 #:import OpacityScrollEffect kivy.effects.opacityscroll.OpacityScrollEffect
-<WidgetPageContentBaseElement>:
+<WidgetPageContentRecycleElement>:
     effect_cls:OpacityScrollEffect
     #viewclass: 'WidgetRowElement'
     SelectableRecycleBoxLayout:
@@ -12,35 +12,41 @@
         #touch_multiselect: True
 
 <WidgetPageContentTitleElement>
-    size_hint_y: None
-    height: 100
 
 <WidgetPageContentDataElement>
 
-<WidgetRowTitleElement>
-
-<WidgetRowElement>:
-    size_hint_y: None
-    height: 35
-    orientation: 'horizontal'
-    # Draw a background to indicate selection
-
 <WidgetRowIndexElement>
-    size_hint: 0.07, 1
+    size_hint: 0.15, 1
     #size_hint: 0.3, 0.99
     #width: 15
     #height: 35
 
+<WidgetRowTitleElement>
+    size_hint_y: None
+    height: self.minimum_height
+    canvas.after:
+        Color:
+            rgba: (0.5, 1, 0.3, 0.3)
+        Rectangle:
+            # self here refers to the widget i.e BoxLayout
+            pos: self.pos
+            size: self.size
+    on_height: print("WidgetRowTitleElement", self.height)
+
+<WidgetRowElement>:
+    size_hint_y: None
+    height: self.minimum_height
+    orientation: 'horizontal'
+    # Draw a background to indicate selection
+    on_height: print("WidgetRowElement", self.height)
+
 <WidgetFieldIndexElement>
-    #font_size: 12
-    shorten: True
-    shorten_from: 'right'
-    text_size: self.width, None
-    #bold: True
-    #valign: 'center'
+    idx_size_hint: 0.2
+    size_hint_y: None
+    height: self.minimum_height
 
 <WidgetRowDataElement>
-    size_hint: 0.93, 1
+    #size_hint: 0.85, 1
     #size_hint_y: 0.99
     #height: 35
     orientation: 'horizontal'
@@ -49,33 +55,67 @@
     orientation:'vertical'
 
 <WidgetFieldLabelBase>:
-    #max_lines: 1
-    #strip:True
-    text_size: self.size
     halign: 'center'
-
-<WidgetFieldLabelName>:
-    id: name
-    valign: 'top'
-    #bold: True
-    #outline_width: 1
-    #outline_color: 0.7, 0.8, 0.3, 0.5
+    valign: 'middle'
     canvas.before:
         Color:
-            rgba: 1, 1, 0.0, 0.7
+            rgba: self.border_color
         Rectangle:
             # self here refers to the widget i.e BoxLayout
             pos: self.pos
             size: self.size
+        Color:
+            rgba: self.background_color
+        Rectangle:
+            # self here refers to the widget i.e BoxLayout
+            pos: self.x + self.border[3], self.y + self.border[2]
+            size: self.width -self.border[1] - self.border[3], self.height - self.border[0] - self.border[2]
+
+<WidgetFieldIndexName>
+    font_size: 12
+    shorten: False
+    shorten_from: 'right'
+    text_size: self.width, None
+    #bold: True
+    valign: 'center'
+
+<WidgetFieldLabelName>:
+    size_hint_y: None
+    height: 30
+    font_name: "font/ARIALN.ttf"
+    font_size: '15sp'
+    bold: True
+    color: 0, 0, 0, 0.7
+    #outline_width: 0.1
+    #outline_color: 0, 0, 0, 0.8
+    background_color: 1, 1, 1, 1
+    border_color: 0, 0, 0, 1
+    border: (0.5, 0.5, 0.5, 0.5)
+
+<WidgetFieldTitleName>:
+    size_hint_y: None
+    height: 30
+    font_name: "font/arialbd.ttf"
+    font_size: '15sp'
+    color: 1, 1, 1, 1
+    outline_width: 0.1
+    outline_color: 1, 1, 1, 0.2
+    background_color: 0, 0, 0, 1
+    border_color: 1, 1, 1, 1
+    border: (0.5, 0.5, 0.5, 0.5)
 
 <WidgetFieldLabelValue>:
     id: value
     valign: 'middle'
     #max_lines: 1
-    canvas.before:
-        Color:
-            rgba: 1, 1, 0.3, 0.2
-        Rectangle:
-            # self here refers to the widget i.e BoxLayout
-            pos: self.pos
-            size: self.size
+
+<WidgetFieldInputValue>
+    multiline: False
+    write_tab: False
+    size_hint: (1, 1)
+    #background_color: (1, 1, 1, 1)
+    color_data_valid: (1, 1, 1, 1)
+    color_data_invalid: (1, 0.6, 0.6, 1)
+    cursor_color: (0, 0, 0, 1)
+    pos_hint: {'center_x': 0.5}
+    border: (0, 0 , 0, 0)

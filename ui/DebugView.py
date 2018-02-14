@@ -329,6 +329,13 @@ class ElemValVar2(ElemValVarBase):
         if self.REFRESH_TXT:
             self.text = format(val, 'X')
 
+    def set_value(self, val):
+        self.value = val
+        self.do_fresh()
+
+    def do_fresh(self):
+        self.text = format(self.value, 'X')
+
     # def on_text_validate(self):
     #     print(self.__class__.__name__, "on_text_validate", type(self.text), self.text)
     #     self.on_focus(self, False)

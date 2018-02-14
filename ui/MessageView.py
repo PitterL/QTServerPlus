@@ -12,14 +12,14 @@ from kivy.properties import ObjectProperty, BooleanProperty, ListProperty, \
 
 
 from ui.TableElement import WidgetPageBehavior
+from ui.TableElement import WidgetRowTitleElement, WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement
 from ui.TableElement import WidgetFieldElement, WidgetFieldLabelName, WidgetFieldLabelValue
-from ui.TableElement import WidgetRowTitleElement
-from ui.TableElement import WidgetRowElement, WidgetRowIndexElement, WidgetFieldIndexElement
+from ui.TableElement import WidgetFieldIndexElement, WidgetFieldIndexName
 
 class WidgetFieldToggleName(ToggleButton):
-    def __init__(self, **kwargs):
-        self.__id = kwargs.pop('eid')
-        self.__type = kwargs.pop('etype')
+    def __init__(self, id , type, **kwargs):
+        self._id = id
+        self._type = type
 
         super(WidgetFieldToggleName, self).__init__(**kwargs)
 
@@ -27,45 +27,42 @@ class WidgetFieldToggleName(ToggleButton):
         return "{} id {} type {}: {} ".format(self.__class__.__name__, self.id(), self.type(), self.text)
 
     def id(self):
-        return self.__id
+        return self._id
 
     def type(self):
-        return self.__type
+        return self._type
 
     def row_idx(self):
-        return self.__id[0]
+        return self._id[0]
 
     def col_idx(self):
-        return self.__id[1]
+        return self._id[1]
 
 class BubbleWidget(BoxLayout):
     pass
 
 class WidgetBubbleElement(WidgetPageBehavior, BubbleWidget):
-    PAGE_LAYOUT_TABLE = {
+    PAGE_CLS_LAYOUT_TABLE = {
         'default': {
-            'default':{'class_row_title_elem': WidgetRowTitleElement,
-                'class_row_elem': WidgetRowElement,
-                'class_field_elem': (WidgetFieldElement, WidgetFieldToggleName, None),
-                'class_index_elem': (WidgetRowIndexElement, WidgetFieldIndexElement)},
-            'title':{ 'skip_value': True},
-            'content': {'skip_value': True}
+            'title': {
+                'class_row_elems': (WidgetRowTitleElement, WidgetRowIndexElement, WidgetRowDataElement),
+                'class_idx_elems': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
+                'class_data_elems': (WidgetFieldElement, WidgetFieldLabelName, None)},
+            'data':{
+                'class_row_elems': (WidgetRowElement,WidgetRowIndexElement, WidgetRowDataElement),
+                'class_idx_elems': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
+                'class_data_elems': (WidgetFieldElement, WidgetFieldToggleName, None)}
         }
     }
 
     @classmethod
-    def get_page_layout_kwargs(cls, id):
-        if id in cls.PAGE_LAYOUT_TABLE.keys():
-            kwargs = cls.PAGE_LAYOUT_TABLE[id]
+    def get_cls_layout_kwargs(cls, id):
+        if id in cls.PAGE_CLS_LAYOUT_TABLE.keys():
+            kwargs = cls.PAGE_CLS_LAYOUT_TABLE[id]
         else:
-            kwargs = cls.PAGE_LAYOUT_TABLE['default']
+            kwargs = cls.PAGE_CLS_LAYOUT_TABLE['default']
 
-        kwargs_t = kwargs['default'].copy()
-        kwargs_t.update(kwargs['title'])
-        kwargs_c = kwargs['default'].copy()
-        kwargs_c.update(kwargs['content'])
-
-        return kwargs_t, kwargs_c
+        return kwargs
 
     def __init__(self, repo):
         repo_id = repo.id()
@@ -73,8 +70,8 @@ class WidgetBubbleElement(WidgetPageBehavior, BubbleWidget):
         #w_content = self.ids['content']
         w_content = self
 
-        widget_kwargs = self.get_page_layout_kwargs(repo_id)
-        WidgetPageBehavior.__init__(self, w_content, repo_id, widget_kwargs)
+        cls_kwargs = self.get_cls_layout_kwargs(repo_id)
+        WidgetPageBehavior.__init__(self, w_content, repo_id, cls_kwargs)
         #if repo.valid():
         self.create_page_content_widget(repo)
 

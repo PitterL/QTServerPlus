@@ -17,149 +17,59 @@
 #from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 
 from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem, TabbedPanelHeader
-
 from collections import OrderedDict
 from kivy.properties import BooleanProperty
 
 from server.devinfo import Page
-from ui.TableElement import WidgetPageBehavior
-from ui.TableElement import WidgetFieldElement, WidgetFieldLabelName, WidgetFieldLabelValue
-from ui.TableElement import WidgetRowTitleElement
-from ui.TableElement import WidgetRowElement, WidgetRowIndexElement, WidgetFieldIndexElement
+from ui.TableElement import WidgetPageContentRecycleElement
+from ui.TableElement import WidgetPageBehavior, WidgetPageContentTitleElement, WidgetPageContentDataElement
+from ui.TableElement import WidgetRowTitleElement, WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement
+from ui.TableElement import WidgetFieldElement, WidgetFieldLabelName, WidgetFieldInputValue
+from ui.TableElement import WidgetFieldIndexElement, WidgetFieldIndexName
+from ui.TableElementT1 import WidgetT1PageContentTitleElement, WidgetT1PageContentDataElement
+from ui.TableElementT1 import WidgetT1RowTitleElement, WidgetT1RowElement, WidgetT1FieldLabelValue
 
-class WidgetFieldT1Element(WidgetFieldElement):
-    def __init__(self, **kwargs):
-        #print(self.__class__.__name__, kwargs)
-        super(WidgetFieldT1Element, self).__init__(**kwargs)
-
-    @staticmethod
-    def to_field_value(row_idx, col_idx, value):
-
-        def func_report_id(report_id):
-            if report_id:
-                st, end = report_id
-                if st == end:
-                    return "{}".format(st)
-                else:
-                    return "{st}-{end}".format(st=st, end=end)
-            else:
-                return '-'
-
-        func_list = (None, hex, None, None, func_report_id)
-        if col_idx < len(func_list):
-            func = func_list[col_idx]
-        else:
-            func = None
-
-        if func:
-            value = func(value)
-
-        return str(value)
-
-
-class WidgetRowT1Element(WidgetRowElement):
-    REPORT_ID_TABLE = OrderedDict()
-    ROW_TITLE_DATA_NAME = ('TYPE', 'ADDR', 'SIZE', 'INSTANCES', 'REPORT ID')
-
-    def refresh_view_attrs(self, rv, index, data):
-        ''' Catch and handle the view changes '''
-        #print(self.__class__.__name__, rv, index, data)
-
-        kwargs = data
-        w_row_kwargs = kwargs.get('w_row_kwargs')
-        w_field_kwargs = kwargs.get('w_field_kwargs')
-        skip_value = w_field_kwargs.get('skip_value')
-        skip_name = w_field_kwargs.get('skip_name')
-        super(WidgetRowT1Element, self).__init2__(**w_row_kwargs)
-
-        row_mm = w_row_kwargs.get('row_mm')
-        field_size = len(row_mm)
-
-        #print(self.__class__.__name__, row_mm)
-        if not skip_value:
-            # pid = row_mm.get_field('type')
-            # addr = row_mm.get_field('start_address')
-            # size = row_mm.get_field('size_minus_one') + 1
-            # instances = row_mm.get_field('instances_minus_one') + 1
-            # num_report_ids = row_mm.get_field('num_report_ids') * instances
-            val = row_mm.values()
-            print(self.__class__.__name__, val)
-            pid, addr, size, instances, num_report_ids = val
-            size = size + 1
-            instances = instances + 1
-            num_report_ids = num_report_ids * instances
-
-            if num_report_ids:
-                report_st = 1
-                for k, v in self.REPORT_ID_TABLE.items():
-                    if k == pid:
-                        break
-
-                    report_st += v
-
-                report_end = report_st + num_report_ids - 1
-                report_id = (report_st, report_end)
-            else:
-                report_id = None
-
-            if id not in self.REPORT_ID_TABLE.keys():
-                self.REPORT_ID_TABLE[pid] = num_report_ids
-
-            elem_values = (pid, addr, size, instances, report_id)
-
-        for j in range(field_size):
-            kwargs = dict(col_idx=j, **w_field_kwargs)
-            if not skip_value:
-                kwargs['value'] = elem_values[j]
-
-            if not skip_name:
-                kwargs['name'] = self.ROW_TITLE_DATA_NAME[j]
-
-            w_field = self.create_field_element(**kwargs)
-            self.add_children_layout(self.CHILD_ELEM_DATA, w_field)
-
-        self.index = index
-
-        #print(self.__class__.__name__, self.REPORT_ID_TABLE)
-
-        return super(WidgetRowElement, self).refresh_view_attrs(
-            rv, index, data)
+class WidgetFieldTitleName(WidgetFieldLabelName):
+    pass
 
 class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
-    PAGE_LAYOUT_TABLE = {
+    PAGE_CLS_LAYOUT_TABLE = {
         Page.OBJECT_TABLE: {
-            #'title': ("type", "address", "size", "instances", "report id"),
-            'default': {'class_row_title_elem': WidgetRowTitleElement,
-                'class_row_elem': WidgetRowT1Element,
-                'class_field_elem': (WidgetFieldT1Element,WidgetFieldLabelName, WidgetFieldLabelValue),
-                'class_index_elem': (WidgetRowIndexElement, WidgetFieldIndexElement)},
-            'title': {'skip_value': True},
-            'content': {'skip_name':True}
+            # 'title': ("type", "address", "size", "instances", "report id"),
+            'title': {
+                'class_content': WidgetT1PageContentTitleElement,
+                'class_row_elems': (WidgetT1RowTitleElement, WidgetRowIndexElement, WidgetRowDataElement),
+                'class_idx_elems': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
+                'class_data_elems': (WidgetFieldElement, WidgetFieldLabelName, None)},
+            'data': {
+                'class_content': WidgetT1PageContentDataElement,
+                'class_row_elems': (WidgetT1RowElement, WidgetRowIndexElement, WidgetRowDataElement),
+                'class_idx_elems': (WidgetFieldIndexElement, None, WidgetT1FieldLabelValue),
+                'class_data_elems': (WidgetFieldElement, None, WidgetT1FieldLabelValue)}
         },
 
         'default': {
-            'default':{'class_row_title_elem': WidgetRowTitleElement,
-                'class_row_elem': WidgetRowElement,
-                'class_field_elem': (WidgetFieldElement, WidgetFieldLabelName, WidgetFieldLabelValue),
-                'class_index_elem': (WidgetRowIndexElement, WidgetFieldIndexElement)},
-            'title':{ 'skip_value': True},
-            'content': {}
+            'title': {
+                'class_content': WidgetPageContentTitleElement,
+                'class_row_elems': (WidgetRowTitleElement, WidgetRowIndexElement, WidgetRowDataElement),
+                'class_idx_elems': (WidgetFieldIndexElement, WidgetFieldTitleName, None),
+                'class_data_elems': (WidgetFieldElement, WidgetFieldTitleName, None)},
+            'data': {
+                'class_content': WidgetPageContentDataElement,
+                'class_row_elems': (WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement),
+                'class_idx_elems': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
+                'class_data_elems': (WidgetFieldElement, WidgetFieldLabelName, WidgetFieldInputValue)}
         }
     }
 
     @classmethod
-    def get_page_layout_kwargs(cls, id):
-        if id in cls.PAGE_LAYOUT_TABLE.keys():
-            kwargs = cls.PAGE_LAYOUT_TABLE[id]
+    def get_cls_layout_kwargs(cls, id):
+        if id in cls.PAGE_CLS_LAYOUT_TABLE.keys():
+            kwargs = cls.PAGE_CLS_LAYOUT_TABLE[id]
         else:
-            kwargs = cls.PAGE_LAYOUT_TABLE['default']
+            kwargs = cls.PAGE_CLS_LAYOUT_TABLE['default']
 
-        kwargs_t = kwargs['default'].copy()
-        kwargs_t.update(kwargs['title'])
-        kwargs_c = kwargs['default'].copy()
-        kwargs_c.update(kwargs['content'])
-
-        return kwargs_t, kwargs_c
+        return kwargs
 
     def __init__(self, page_mm):
         page_id = page_mm.id()
@@ -168,7 +78,7 @@ class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
         TabbedPanelItem.__init__(self, text=tab_name)
         w_content = self.ids['content']
 
-        widget_kwargs = self.get_page_layout_kwargs(page_id)
+        widget_kwargs = self.get_cls_layout_kwargs(page_id)
         WidgetPageBehavior.__init__(self, w_content, page_id, widget_kwargs)
         if page_mm.valid():
             self.create_page_content_widget(page_mm)
@@ -279,17 +189,19 @@ class PageElementRoot(TabbedPanel):
 
     def create_page_element(self, page_mm):
         parent_inst = page_mm.parent_inst()
-        major, inst = page_mm.id()
+        page_id = major, inst = page_mm.id()
         if parent_inst > 1:
             parent_widget = self.get_element(major)
             if not parent_widget:
                 parent_widget = WidgetPageMultiInstElement(major, parent_inst)
                 self.add_element(major, parent_widget)
-            widget = WidgetPageElement(page_mm)
-            parent_widget.add_element((major, inst), widget)
         else:
+            parent_widget = self
+
+        widget = parent_widget.get_element(page_id)
+        if not widget:
             widget = WidgetPageElement(page_mm)
-            self.add_element(major, widget)
+            parent_widget.add_element(major, widget)
 
         return widget
 
@@ -362,14 +274,14 @@ if __name__ == '__main__':
 
             chip.create_chip_mmap_pages()
             all_page_mmaps = chip.get_mem_map_tab()
-            for mmap in sorted(all_page_mmaps.values(), key=sort_key):
+            for mmap in sorted(all_page_mmaps.values(), key=sort_key)[:5]:
                 page_id = mmap.id()
                 widget = root.get_element(page_id)
                 if not widget:
                     value = array.array('B', range(mmap.get_value_size()))
                     mmap.set_values(value)
                     widget = root.create_page_element(mmap)
-                    widget.do_fresh(mmap)
+                    #widget.do_fresh(mmap)
 
             return root
 

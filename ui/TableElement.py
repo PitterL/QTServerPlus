@@ -12,12 +12,12 @@ from kivy.uix.widget import Widget
 from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 #from kivy.uix.label import Label
-from kivy.properties import BooleanProperty
+from kivy.properties import BooleanProperty, StringProperty, ListProperty
 from kivy.uix.recycleboxlayout import RecycleBoxLayout
 from kivy.uix.behaviors import FocusBehavior
 from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 from kivy.animation import Animation
-
+from kivy.uix.textinput import TextInput
 from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem, TabbedPanelHeader
 from server.devinfo import Page
 
@@ -87,64 +87,122 @@ class FocusLabel(FocusWithColor, Label):
 
         return True
 
-class WidgetFieldLabelBase(FocusLabel):
-    def __init__(self, **kwargs):
-        self.__id = kwargs.pop('eid')
-        self.__type = kwargs.pop('etype')
+class WidgetFieldLabelBase(Label):
 
-        super(WidgetFieldLabelBase, self).__init__(**kwargs)
+
+    border = ListProperty([1, 1, 1, 1])
+    """Widget border size: It must be a list of four values: (bottom, right, top, left)."""
+
+    border_color =  ListProperty([1, 1, 1, 1])
+    """Border color, in the format (r, g, b, a)."""
+    
+    background_color =  ListProperty([0, 0, 0, 1])
+    """Border color, in the format (r, g, b, a)."""
+    
+    (TYPE_NAME, TYPE_VALUE) = ('NAME', 'VALUE')
+    def __init__(self, row, col, v, t, **kwargs):
+        self.row = row
+        self.col = col
+        self._val = v
+        self._type = t
+        super(WidgetFieldLabelBase, self).__init__(text=self.covert_to_text(), **kwargs)
 
     def __str__(self):
-        return "{} id {} type {}: {} ".format(self.__class__.__name__, self.id(), self.type(), self.text)
-
-    def id(self):
-        return self.__id
+        return "{} row {} col {} val {} type {}".format(self.__class__.__name__, self.row, self.col, self._val, self._type)
 
     def type(self):
-        return self.__type
+        return self._type
 
-    def row_idx(self):
-        return self.__id[0]
+    def is_type_name(self):
+        return self.TYPE_NAME == self._type
 
-    def col_idx(self):
-        return self.__id[1]
+    def is_type_value(self):
+        return self.TYPE_VALUE == self._type
 
+    def to_field_name(self, name):
+        return name
 
-class WidgetFieldIndexElement(FocusLabel):
-    pass
+    def to_field_value(self, value):
+        return "%02X" %value
+
+    def covert_to_text(self):
+        data = self._val
+        if self.is_type_name():
+            return self.to_field_name(data)
+        elif self.is_type_value():
+            return self.to_field_value(data)
+        else:
+            return '<%s>' % str(data)
+
+    def get_text(self):
+        pass
+
+    def fresh(self):
+        self.text = self.covert_to_text()
+
+    def set_value(self, v):
+        self._val = v
+        self.fresh()
+
+class WidgetFieldIndexName(WidgetFieldLabelBase):
+    def __init__(self, row, col, v):
+        super(WidgetFieldIndexName, self).__init__(row, col, v, self.TYPE_NAME)
+        self._type = self.TYPE_NAME
 
 class WidgetFieldLabelName(WidgetFieldLabelBase):
-    pass
+    def __init__(self, row, col, v, **kwargs):
+        super(WidgetFieldLabelName, self).__init__(row, col, v, self.TYPE_NAME, **kwargs)
+        self._type = self.TYPE_NAME
 
 class WidgetFieldLabelValue(WidgetFieldLabelBase):
-    pass
+    def __init__(self, row, col, v):
+        super(WidgetFieldLabelValue, self).__init__(row, col, v, self.TYPE_VALUE)
+        self._type = self.TYPE_VALUE
+
+from ui.DebugView import ElemValVar2, ElemValVarBase
+#WidgetFieldElemBehavior
+
+class WidgetFieldInputValue(ElemValVar2):
+    (TYPE_NAME, TYPE_VALUE) = ('NAME', 'VALUE')
+
+    def __init__(self, row, col, v):
+        super(WidgetFieldInputValue, self).__init__()
+        self.row = row
+        self.col = col
+        self.set_value(v)
+
+    def type(self):
+        return self.TYPE_VALUE
+
+    def is_type_name(self):
+        return False
+
+    def is_type_value(self):
+        return True
 
 class WidgetFieldElement(BoxLayout):
-    (NAME, VALUE) = range(2)
-
     def __init__(self, **kwargs):
         #print(self.__class__.__name__, kwargs)
-        #page_id = kwargs.pop('page_id')
         self.__layout = {}
-        row_idx =  kwargs.pop('row_idx')
-        col_idx = kwargs.pop('col_idx')
-        name = kwargs.pop('name', None)
-        value = kwargs.pop('value', None)
-        skip_name = kwargs.pop('skip_name', False)
-        skip_value = kwargs.pop('skip_value', False)
-        class_field_name = kwargs.pop('class_field_name')
-        class_field_value = kwargs.pop('class_field_value')
-        layout_kwargs = kwargs.pop('layout_kwargs', dict())
+        self.row =  kwargs.get('row_idx')
+        self.col = kwargs.get('col_idx')
+        name = kwargs.get('name', None)
+        value = kwargs.get('value', None)
+        cls_field_name = kwargs.get('class_field_name')
+        cls_field_value = kwargs.get('class_field_value')
+        #cls_field_elem, cls_field_name, cls_field_value = kwargs.get('cls_kwargs')
+        layout_kwargs = kwargs.get('layout_kwargs', dict())
 
+        #print(self.__class__.__name__, layout_kwargs)
         super(WidgetFieldElement, self).__init__(**layout_kwargs)
 
-        if not skip_name:
-            text = self.to_field_name(row_idx, col_idx, name)
-            self.add_layout(self.NAME, class_field_name(eid=(row_idx, col_idx), etype=self.NAME, text=text))
+        if cls_field_name:
+            w = cls_field_name(self.row, self.col, name)
+            self.add_layout(w.type(), w)
 
-        if not skip_value:
-            text = self.to_field_value(row_idx, col_idx, value)
-            self.add_layout(self.VALUE, class_field_value(eid=(row_idx, col_idx), etype=self.VALUE, text=text))
+        if cls_field_value:
+            w = cls_field_value(self.row, self.col, value)
+            self.add_layout(w.type(), w)
 
         #print(__class__.__name__, self.children)
 
@@ -152,14 +210,6 @@ class WidgetFieldElement(BoxLayout):
         text = super(WidgetFieldElement, self).__str__()
         text += "\n".join(map(str, self.children))
         return text
-
-    @staticmethod
-    def to_field_name(row_idx, col_idx, name):
-        return name
-
-    @staticmethod
-    def to_field_value(row_idx, col_idx, value):
-        return str(hex(value))
 
     def get_layout(self, name):
         return self.__layout.get(name, None)
@@ -173,34 +223,111 @@ class WidgetFieldElement(BoxLayout):
         self.__layout.clear()
         self.clear_widgets()
 
-    def field_type(self, type):
-        for field_t in self.children:
-            if field_t.type() == type:
-                return field_t
+    # def field_type(self, type):
+    #     for field_t in self.children:
+    #         if field_t.is_type(type):
+    #             return field_t
 
     def set_value(self, value):
         for child in self.children:
-            if child.type() == WidgetFieldElement.VALUE:
-                child.text = self.to_field_value(child.row_idx(), child.col_idx(), value)
+            if child.is_type_name():
+                child.set_value(value)
                 break
 
     def set_name(self, name):
         for child in self.children:
-            if child.type() == WidgetFieldElement.NAME:
-                child.text = self.to_field_name(child.row_idx(), child.col_idx(), name)
+            if child.is_type_value():
+                child.set_value(name)
                 break
 
-class WidgetRowIndexElement(BoxLayout):
-    def __init__(self, row_idx_elems, **kwargs):
-        super(WidgetRowIndexElement, self).__init__(**kwargs)
+    from kivy.graphics import BorderImage
 
-        #layout = self.ids['content']
-        #layout.text = str(row_idx)
-        self.line_space = sum(map(lambda x: x[1] if x else 0, row_idx_elems))
-        for elem in row_idx_elems:
-            if elem:
-                percent = elem[1] / self.line_space
-                self.add_widget(WidgetFieldIndexElement(text=elem[0], size_hint_x=percent, font_size=12))
+    border = ListProperty([4, 4, 4, 4])
+    '''Border used for :class:`~kivy.graphics.vertex_instructions.BorderImage`
+    graphics instruction. Used with :attr:`background_normal` and
+    :attr:`background_active`. Can be used for a custom background.
+
+    .. versionadded:: 1.4.1
+
+    It must be a list of four values: (bottom, right, top, left). Read the
+    BorderImage instruction for more information about how to use it.
+
+    :attr:`border` is a :class:`~kivy.properties.ListProperty` and defaults
+    to (4, 4, 4, 4).
+    '''
+
+    background_normal = StringProperty(
+        'atlas://data/images/defaulttheme/textinput')
+    '''Background image of the TextInput when it's not in focus.
+
+    .. versionadded:: 1.4.1
+
+    :attr:`background_normal` is a :class:`~kivy.properties.StringProperty` and
+    defaults to 'atlas://data/images/defaulttheme/textinput'.
+    '''
+
+    background_disabled_normal = StringProperty(
+        'atlas://data/images/defaulttheme/textinput_disabled')
+    '''Background image of the TextInput when disabled.
+
+    .. versionadded:: 1.8.0
+
+    :attr:`background_disabled_normal` is a
+    :class:`~kivy.properties.StringProperty` and
+    defaults to 'atlas://data/images/defaulttheme/textinput_disabled'.
+    '''
+
+    background_active = StringProperty(
+        'atlas://data/images/defaulttheme/textinput_active')
+    '''Background image of the TextInput when it's in focus.
+
+    .. versionadded:: 1.4.1
+
+    :attr:`background_active` is a
+    :class:`~kivy.properties.StringProperty` and
+    defaults to 'atlas://data/images/defaulttheme/textinput_active'.
+    '''
+
+    background_color = ListProperty([1, 1, 1, 1])
+    '''Current color of the background, in (r, g, b, a) format.
+
+    .. versionadded:: 1.2.0
+
+    :attr:`background_color` is a :class:`~kivy.properties.ListProperty`
+    and defaults to [1, 1, 1, 1] (white).
+    '''
+
+    foreground_color = ListProperty([0, 0, 0, 1])
+    '''Current color of the foreground, in (r, g, b, a) format.
+
+    .. versionadded:: 1.2.0
+
+    :attr:`foreground_color` is a :class:`~kivy.properties.ListProperty`
+    and defaults to [0, 0, 0, 1] (black).
+    '''
+
+    disabled_foreground_color = ListProperty([0, 0, 0, .5])
+    '''Current color of the foreground when disabled, in (r, g, b, a) format.
+
+    .. versionadded:: 1.8.0
+
+    :attr:`disabled_foreground_color` is a
+    :class:`~kivy.properties.ListProperty` and
+    defaults to [0, 0, 0, 5] (50% transparent black).
+    '''
+
+class WidgetFieldIndexElement(WidgetFieldElement):
+    def __init__(self, **kwargs):
+        super(WidgetFieldIndexElement, self).__init__(**kwargs)
+
+        self.adjust_size_hint()
+
+    def adjust_size_hint(self):
+        if self.col == 0:
+            self.size_hint_x = self.idx_size_hint
+    #
+class WidgetRowIndexElement(BoxLayout):
+    pass
 
 class WidgetRowDataElement(BoxLayout):
     pass
@@ -227,23 +354,12 @@ class WidgetRowElement(RecycleDataViewBehavior, BoxLayout):
 
         self.__page_id = kwargs.get('page_id')
         self.__row_idx = kwargs.get('row_idx')
+        #cls_row, cls_row_idx, cls_row_data = kwargs.get('cls_kwargs')
 
-        #print(kwargs)
-        #skip_index = kwargs.get('skip_index', True)
         layout_kwargs = kwargs.get('layout_kwargs', dict())
         for k, v in layout_kwargs:
             if hasattr(self, k):
                 setattr(self, k, v)
-
-        row_mm = kwargs.get('row_mm', None)
-        if row_mm is not None:
-            if row_mm.idx:
-                #idx_widget = WidgetRowIndexElement(self.__row_idx + 1)
-                idx_widget = WidgetRowIndexElement(row_mm.idx)
-                self.add_layout(self.CHILD_ELEM_INDEX, idx_widget)
-
-        data_widget = WidgetRowDataElement()
-        self.add_layout(self.CHILD_ELEM_DATA, data_widget)
 
     def inited(self):
         return len(self.__layout) > 0
@@ -280,11 +396,11 @@ class WidgetRowElement(RecycleDataViewBehavior, BoxLayout):
         #print(self.__class__.__name__, kwargs)
         page_id = self.page_id()
         row_idx = self.row_id()
-        class_field_elem, class_field_name, class_field_value = kwargs.pop('class_field_elem')
+        cls_field_elem, cls_field_name, cls_field_value = kwargs.get('cls_kwargs')
 
         #print(class_field_elem, kwargs)
-        return class_field_elem(page_id=page_id, row_idx=row_idx,
-                                class_field_name=class_field_name, class_field_value=class_field_value, **kwargs)
+        return cls_field_elem(page_id=page_id, row_idx=row_idx,
+                                class_field_name=cls_field_name, class_field_value=cls_field_value, **kwargs)
 
     def refresh_data(self, data):
         kwargs = data
@@ -305,26 +421,51 @@ class WidgetRowElement(RecycleDataViewBehavior, BoxLayout):
         #     return
 
         kwargs = data
-        w_row_kwargs = kwargs.get('w_row_kwargs')
-        w_field_kwargs = kwargs.get('w_field_kwargs')
-        skip_value = w_field_kwargs.get('skip_value')
-        skip_name = w_field_kwargs.get('skip_name')
-        self.__init2__(**w_row_kwargs)
+        row_kwargs = kwargs.get('w_row_kwargs')
+        #w_field_kwargs = kwargs.get('w_field_kwargs')
+        c_kwargs = kwargs.get('cls_kwargs')
+        cls_row_elem, cls_row_idx, cls_row_data = c_kwargs.get('class_row_elems')
+        cls_idx_elems = c_kwargs.get('class_idx_elems')
+        cls_data_elems = c_kwargs.get('class_data_elems')
 
-        row_mm = w_row_kwargs.get('row_mm')
-        line_space = sum(map(lambda v: v.width, row_mm.field_values()))
-        for j, (name, elem) in enumerate(row_mm):
-            percent = elem.width / line_space
-            w_layout_kwargs = {'size_hint_x': percent}
-            kwargs = dict(col_idx=j, layout_kwargs=w_layout_kwargs, **w_field_kwargs)
-            if not skip_value:
-                kwargs['value'] = elem.value
+        # skip_value = w_field_kwargs.get('skip_value')
+        # skip_name = w_field_kwargs.get('skip_name')
 
-            if not skip_name:
-                kwargs['name'] = name
+        self.__init2__(**row_kwargs)
 
-            w_field = self.create_field_element(**kwargs)
-            self.add_children_layout(self.CHILD_ELEM_DATA, w_field)
+        # if cls_row_idx:
+        #     self.add_layout(self.CHILD_ELEM_INDEX, cls_row_idx())
+        #
+        # if cls_row_data:
+        #     self.add_layout(self.CHILD_ELEM_DATA, cls_row_data())
+
+        #index content
+        row_mm = row_kwargs.get('row_mm', None)
+        if row_mm is not None:
+            # idx content
+            if cls_row_idx:
+                if row_mm.idx_elems:
+                    self.add_layout(self.CHILD_ELEM_INDEX, cls_row_idx())
+                    #line_space = sum(map(lambda x: x[1] if x else 0, row_mm.idx_elems))
+                    for j, elem in enumerate(row_mm.idx_elems):
+                        if elem:
+                            #percent = elem[1] / line_space
+                            #layout_kwargs = dict(size_hint_x=percent)
+                            w_field = self.create_field_element(col_idx=j, name=elem[0], cls_kwargs=cls_idx_elems)
+                            #w_field = WidgetFieldIndexElement(text=elem[0], size_hint_x=percent, font_size=12)
+                            self.add_children_layout(self.CHILD_ELEM_INDEX, w_field)
+
+            #data content
+            if cls_row_data:
+                self.add_layout(self.CHILD_ELEM_DATA, cls_row_data())
+                line_space = sum(map(lambda v: v.width, row_mm.field_values()))
+                for j, (name, elem) in enumerate(row_mm):
+                    percent = elem.width / line_space
+                    layout_kwargs = {'size_hint_x': percent}
+                    kwargs = dict(col_idx=j, name=name, value=elem.value,
+                                  layout_kwargs=layout_kwargs, cls_kwargs=cls_data_elems)
+                    w_field = self.create_field_element(**kwargs)
+                    self.add_children_layout(self.CHILD_ELEM_DATA, w_field)
 
         self.index = index
 
@@ -339,7 +480,7 @@ class WidgetRowElement(RecycleDataViewBehavior, BoxLayout):
         if self.collide_point(*touch.pos) and self.selectable:
             return self.parent.select_with_touch(self.index, touch)
 
-    def apply_selection(self, rv, index, is_selected):
+    def apply_selection1(self, rv, index, is_selected):
         ''' Respond to the selection of items in the view. '''
         self.selected = is_selected
         # if is_selected:
@@ -349,58 +490,30 @@ class WidgetRowElement(RecycleDataViewBehavior, BoxLayout):
 
 class WidgetRowTitleElement(WidgetRowElement):
     pass
-# class WidgetRowTitleElement(WidgetRowElement):
-#
-#     def refresh_view_attrs1(self, rv, index, data):
-#         ''' Catch and handle the view changes '''
-#         #print(self.__class__.__name__, rv, index, data)
-#
-#         kwargs = data
-#         w_row_kwargs = kwargs.get('w_row_kwargs')
-#         w_field_kwargs = kwargs.get('w_field_kwargs')
-#         super(WidgetRowTitleElement, self).__init2__(**w_row_kwargs)
-#
-#         # page_title = w_row_kwargs.get('title')   #[:2] value index filed, [2:] value bit field
-#         #
-#         # for row_data in page_title:
-#         #     print(self.__class__.__name__, "refresh_view_attrs", row_data)
-#         #     idx = row_data.idx
-#         #     if idx:
-#         #         idx_widget = WidgetRowIndexElement(idx)
-#         #         #self.add_layout(self.CHILD_ELEM_INDEX, idx_widget)
-#         #
-#         #     content_widget = WidgetRowDataElement()
-#         #     self.add_layout(self.CHILD_ELEM_DATA, content_widget)
-#         #     content = row_data.content
-#         #     line_space = sum(map(lambda x: x[1], content))
-#         #     for j, v in enumerate(content):
-#         #         # if isinstance(v, int):
-#         #         #     name = None
-#         #         #     value = v
-#         #         # else:
-#         #         #     name = v
-#         #         #     value = None
-#         #         name, space = v
-#         #         percent = space / line_space
-#         #         w_layout_kwargs = {'size_hint_x': percent}
-#         #
-#         #         kwargs = dict(col_idx=j, name=name, layout_kwargs=w_layout_kwargs, **w_field_kwargs)
-#         #         w_field = self.create_field_element(**kwargs)
-#         #         #print(self.__class__.__name__, "w_field", raw_data)
-#         #         self.add_children_layout(self.CHILD_ELEM_DATA, w_field)
-#
-#         self.index = index
-#
-#         #print(self.__class__.__name__, rv.data[index])
-#         return super(WidgetRowElement, self).refresh_view_attrs(
-#             rv, index, data)
 
 class SelectableRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
                                  RecycleBoxLayout):
     ''' Adds selection and focus behaviour to the view. '''
 
-class WidgetPageContentBaseElement(RecycleView):
+class WidgetPageContentRecycleElement(RecycleView):
     pass
+
+class WidgetPageContentBaseElement(WidgetPageContentRecycleElement):
+    def __init__(self, id, row_elems, cls_kwargs, **layout_kwargs):
+        super(WidgetPageContentBaseElement, self).__init__()
+
+        cls_row_elems = cls_kwargs.get('class_row_elems')
+        data = []
+        for i, row_mm in enumerate(row_elems):
+            row_kwargs = {'w_row_kwargs': dict(page_id=id, row_idx=i, row_mm=row_mm, layout_kwargs=layout_kwargs),
+                        #'w_field_kwargs': dict(skip_name=skip_name, skip_value=skip_value),
+                        'cls_kwargs': cls_kwargs}
+            #print(self.__class__.__name__, row_kwargs)
+            data.append(row_kwargs)
+
+        #root = WidgetPageContentDataElement()
+        setattr(self, 'data', data)
+        setattr(self, 'viewclass', cls_row_elems[0])
 
 class WidgetPageContentTitleElement(WidgetPageContentBaseElement):
     pass
@@ -414,10 +527,10 @@ class WidgetPageBehavior(object):
 
     selected = BooleanProperty(False)
 
-    def __init__(self, parent_widget, id, table_widget_kwargs):
+    def __init__(self, parent_widget, id, cls_kwargs):
         self._parent = parent_widget
         self._id = id
-        self._w_kwargs = table_widget_kwargs
+        self._c_kwargs = cls_kwargs
         self.__layout = {}
 
     def inited(self):
@@ -459,51 +572,53 @@ class WidgetPageBehavior(object):
     #     #super(WidgetPageElement, self).__init__(text=text)
     #     self.cls_base = cls_base.__init__(text=text)
 
-    def create_page_content_title_widget(self, title_mm, layout_kwargs):
-        class_row_title_elem = layout_kwargs.get('class_row_title_elem')
-        class_field_elem = layout_kwargs.get('class_field_elem')
-
-        data = []
-        for i, row_mm in enumerate(title_mm):
-            row_kwargs = {'w_row_kwargs': dict(page_id=self.id(), row_idx=-1, row_mm=row_mm),
-                          'w_field_kwargs': dict(skip_value=True, class_field_elem=class_field_elem)}
-            # print(self.__class__.__name__, row_kwargs)
-            data.append(row_kwargs)
-
-        root = WidgetPageContentTitleElement()
-        setattr(root, 'data', data)
-        setattr(root, 'viewclass', class_row_title_elem)
-
-        return root
-
-    def create_page_content_data_widget(self, page_mm, layout_kwargs):
-        skip_value = layout_kwargs.get('skip_value', False)
-        skip_name = layout_kwargs.get('skip_name', False)
-        class_row_elem = layout_kwargs.get('class_row_elem')
-        class_field_elem = layout_kwargs.get('class_field_elem')
-
-        data = []
-        for i, row_mm in enumerate(page_mm):
-            row_kwargs = {'w_row_kwargs': dict(page_id=self.id(), row_idx=i, row_mm=row_mm, layout_kwargs=dict()),
-                            'w_field_kwargs': dict(skip_name=skip_name, skip_value=skip_value, class_field_elem=class_field_elem)}
-            #print(self.__class__.__name__, row_kwargs)
-            data.append(row_kwargs)
-
-        root = WidgetPageContentDataElement()
-        setattr(root, 'data', data)
-        setattr(root, 'viewclass', class_row_elem)
-
-        return root
+    # def create_page_content_title_widget1(self, title_mm, cls_kwargs):
+    #     cls_row_elems = cls_kwargs.get('class_row_elems')
+    #
+    #     data = []
+    #     for i, row_mm in enumerate(title_mm):
+    #         row_kwargs = {'w_row_kwargs': dict(page_id=self.id(), row_idx=i, row_mm=row_mm),
+    #                       #'w_field_kwargs': dict(skip_value=True,),
+    #                       'cls_kwargs': cls_kwargs}
+    #         # print(self.__class__.__name__, row_kwargs)
+    #         data.append(row_kwargs)
+    #
+    #     root = WidgetPageContentTitleElement()
+    #     setattr(root, 'data', data)
+    #     setattr(root, 'viewclass', cls_row_elems[0])
+    #
+    #     return root
+    #
+    # def create_page_content_data_widget1(self, page_mm, cls_kwargs):
+    #     cls_row_elems = cls_kwargs.get('class_row_elems')
+    #
+    #     data = []
+    #     for i, row_mm in enumerate(page_mm):
+    #         row_kwargs = {'w_row_kwargs': dict(page_id=self.id(), row_idx=i, row_mm=row_mm, layout_kwargs=dict()),
+    #                     #'w_field_kwargs': dict(skip_name=skip_name, skip_value=skip_value),
+    #                     'cls_kwargs': cls_kwargs}
+    #         #print(self.__class__.__name__, row_kwargs)
+    #         data.append(row_kwargs)
+    #
+    #     root = WidgetPageContentDataElement()
+    #     setattr(root, 'data', data)
+    #     setattr(root, 'viewclass', cls_row_elems[0])
+    #
+    #     return root
 
     def create_page_content_widget(self, page_mm):
-         title_kwargs, content_kwargs = self._w_kwargs
-
+         #create title layout
          if page_mm.title:
-             widget = self.create_page_content_title_widget(page_mm.title, layout_kwargs=title_kwargs)
+             cls_kwargs = self._c_kwargs['title']
+             cls_content = cls_kwargs['class_content']
+             widget = cls_content(self.id(), page_mm.title, cls_kwargs)
              self.add_layout(self.PAGE_CHILD_ELEM_TITLE, widget)
 
-         widget = self.create_page_content_data_widget(page_mm, layout_kwargs=content_kwargs)
-         self.add_layout(self.PAGE_CHILD_ELEM_CONTENT, widget)
+         # create data layout
+         # cls_kwargs = self._c_kwargs['data']
+         # cls_content = cls_kwargs['class_content']
+         # widget = cls_content(self.id(), page_mm, cls_kwargs)
+         # self.add_layout(self.PAGE_CHILD_ELEM_CONTENT, widget)
 
     def do_fresh(self, page_mm):
 
@@ -514,13 +629,15 @@ class WidgetPageBehavior(object):
         if self.inited():
             #FIXME: here row_mm may be same as page_mm.row()
             layout = self.get_layout(self.PAGE_CHILD_ELEM_CONTENT)
-            for i, data in enumerate(layout.data):
-                w_row_kwargs = data.get('w_row_kwargs')
-                if 'row_mm' in w_row_kwargs.keys():
-                    w_row_kwargs['row_mm'] = page_mm.row(i)
-                elif 'raw_data' in w_row_kwargs.keys():
-                    w_row_kwargs['row_mm'] = page_mm.row(i).get_value()
-                else:
-                    print(self.__class__.__name__, "Not support value fresh: ", w_row_kwargs)
+            # for i, data in enumerate(layout.data):
+            #     w_row_kwargs = data.get('w_row_kwargs')
+            #     if 'row_mm' in w_row_kwargs.keys():
+            #         w_row_kwargs['row_mm'] = page_mm.row(i)
+            #     # elif 'raw_data' in w_row_kwargs.keys():
+            #     #     w_row_kwargs['row_mm'] = page_mm.row(i).get_value()
+            #     else:
+            #         print(self.__class__.__name__, "Not support value fresh: ", w_row_kwargs)
+            layout.refresh_from_data()
         else:
+            print(self.__class__.__name__, "do_fresh", "create_page_content_widget", page_mm.id())
             self.create_page_content_widget(page_mm)
