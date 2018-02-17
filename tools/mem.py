@@ -25,21 +25,21 @@ class RowElement(object):
             return self.__str__()
 
     def __init__(self, row_desc):
-        self.idx_elems = row_desc.idx
-        self.content_elems = row_desc.content
+        self.idx_desc = row_desc.idx
+        self.content_desc = row_desc.content
         self.fields = OrderedDict()
         self.seq_rsv = 0
         self._pos = 0   #store filed relative pos in initilize
         self.value_size = self.MAX_FIELD_SIZE // 8
 
-        for n, v in self.content_elems:
+        for n, v in self.content_desc:
             self.add_field(n, v)
 
         # for n, v in ele_d:
         #     self.add_field(n, v)
 
     def __str__(self):
-        return self.__class__.__name__ + str((self.idx_elems, self.content_elems))
+        return self.__class__.__name__ + str((self.idx_desc, self.content_desc))
 
     def __repr__(self):
         return '<' + self.__str__() + '>'
@@ -133,13 +133,13 @@ class RowElementByte(object):
             return self.__str__()
 
     def __init__(self, row_desc):
-        self.idx_elems = row_desc.idx
-        self.content_elems = row_desc.content
+        self.idx_desc = row_desc.idx
+        self.content_desc = row_desc.content
         self.fields = OrderedDict()
         self.pos = 0
         self.value_size = 0
 
-        for name, width in self.content_elems:
+        for name, width in self.content_desc:
             self.add_field(name, width)
             self.value_size += width
 

@@ -25,6 +25,7 @@
 
 <WidgetPageElement>:
     #height: self.minimum_height
+    #size_hint: (1, 1)
     canvas.after:
         Color:
             rgba: (0.7, 1, 0.8, 0.6) if self.selected else (0.8, 1, 0.7, 0.6)
@@ -32,14 +33,14 @@
             # self here refers to the widget i.e BoxLayout
             pos: self.pos
             size: self.size
-    BoxLayout:
+    WidgetPageLayout:
         id: content
         orientation:'vertical'
-        #canvas.before:
-        #    Color:
-        #        rgba: 0, 0, 0, 1
-        #    Rectangle:
-        #        # self here refers to the widget i.e BoxLayout
-        #        pos: self.pos
-        #        size: self.size
+        #size_hint: 1, 1
+        #size_hint_y: None
+        #height: self.minimum_height
+        #on_height: print(self.__class__.__name__, self.size)
+        #size: self.minimum_size
+
+
 

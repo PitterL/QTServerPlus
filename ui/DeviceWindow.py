@@ -30,7 +30,7 @@ class DeviceWindow(BoxLayout):
         self.cmd_list = []
         self.object_table = {}
         self.chip = None
-        self.__layout = {}
+        #self.__layout = {}
 
         super(DeviceWindow, self).__init__(*args, **kwargs)
 

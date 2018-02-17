@@ -1,64 +1,11 @@
-from ui.TableElement import WidgetPageContentRecycleElement
-from ui.TableElement import  WidgetRowElement
-from ui.TableElement import WidgetFieldLabelValue
+from ui.TableElement import WidgetRecycleDataView, WidgetPageContentRecycleElement
+from ui.TableElement import  WidgetRowElementBase
+from ui.TableElement import LayerBoxLayout, WidgetFieldLabelValue
 
-class WidgetT1PageContentTitleElement(WidgetPageContentRecycleElement):
-    TITLE = ("type", "address", "size", "instances", "report id")
-    def __init__(self, id, page_mm, cls_kwargs, **layout_kwargs):
-        super(WidgetT1PageContentTitleElement, self).__init__()
+from collections import OrderedDict
 
-        cls_row_elems = cls_kwargs.get('class_row_elems')
-        data = []
-        row_kwargs = {'w_row_kwargs': dict(page_id=id, row_idx=0, row_data=self.TITLE, layout_kwargs=layout_kwargs),
-                      'cls_kwargs': cls_kwargs}
-        data.append(row_kwargs)
-
-        setattr(self, 'data', data)
-        setattr(self, 'viewclass', cls_row_elems[0])
-
-class WidgetT1PageContentDataElement(WidgetPageContentRecycleElement):
-    def __init__(self, id, page_mm, cls_kwargs, **layout_kwargs):
-        super(WidgetT1PageContentDataElement, self).__init__()
-        self.num_report_id_table = {}
-
-        cls_row_elems = cls_kwargs.get('class_row_elems')
-        data = []
-        for i, row_mm in enumerate(page_mm):
-            rid, addr, size, instances, num_report_ids = row_mm.values()
-            size = size + 1
-            instances = instances + 1
-            num_report_ids = num_report_ids * instances
-            report_id = self.set_report_id_num(rid, num_report_ids)
-
-            values = (rid, addr, size, instances, report_id)
-            row_kwargs = {'w_row_kwargs': dict(page_id=id, row_idx=i, row_data=values, layout_kwargs=layout_kwargs),
-                        #'w_field_kwargs': dict(skip_name=skip_name, skip_value=skip_value),
-                        'cls_kwargs': cls_kwargs}
-            #print(self.__class__.__name__, row_kwargs)
-            data.append(row_kwargs)
-
-        #root = WidgetPageContentDataElement()
-        setattr(self, 'data', data)
-        setattr(self, 'viewclass', cls_row_elems[0])
-
-    def set_report_id_num(self, rid, num_report_ids):
-        if num_report_ids:
-            report_st = 1
-            for k, v in self.num_report_id_table.items():
-                if k == rid:
-                    break
-
-                report_st += v
-
-            report_end = report_st + num_report_ids - 1
-            report_id = (report_st, report_end)
-        else:
-            report_id = None
-
-        if id not in self.num_report_id_table.keys():
-            self.num_report_id_table[rid] = num_report_ids
-
-        return report_id
+class WidgetFieldT1IndexName(LayerBoxLayout):
+    pass
 
 class WidgetT1FieldLabelValue(WidgetFieldLabelValue):
     def to_field_value(self, value):
@@ -83,112 +30,134 @@ class WidgetT1FieldLabelValue(WidgetFieldLabelValue):
 
         return str(value)
 
-class WidgetT1RowElement(WidgetRowElement):
+class WidgetT1RowElement(WidgetRowElementBase):
     ROW_TITLE_DATA_NAME = ('TYPE', 'ADDR', 'SIZE', 'INSTANCES', 'REPORT ID')
 
-    def refresh_view_attrs(self, rv, index, data):
-        ''' Catch and handle the view changes '''
-        #print(self.__class__.__name__, rv, index, data)
-        kwargs = data
-        row_kwargs = kwargs.get('w_row_kwargs')
+    #def _create_view(self, rv, index, data):
+    def __init__(self, rv, index, data):
+
+        kwargs = data['view_attrs']
+
+        v_kwargs = kwargs.get('view_kwargs')
+        page_id = v_kwargs.get('page_id')
+        row_id = v_kwargs.get('row_id')
+        row_data = v_kwargs.get('row_data')
+
         c_kwargs = kwargs.get('cls_kwargs')
+        l_kwargs = kwargs.get('layout_kwargs', dict())
+        #self.__init2__(page_id, row_id, l_kwargs)
+        super(WidgetT1RowElement, self).__init__(page_id, row_id, **l_kwargs)
+
         cls_row_elem, cls_row_idx, cls_row_data = c_kwargs.get('class_row_elems')
-        cls_idx_elems = c_kwargs.get('class_idx_elems')
-        cls_data_elems = c_kwargs.get('class_data_elems')
+        cls_idx_field = c_kwargs.get('class_idx_field')
+        cls_data_field = c_kwargs.get('class_data_field')
 
-        self.__init2__(**row_kwargs)
+        idx, content = row_data
+        # idx content
+        if cls_row_idx:
+            self.add_layout(self.CHILD_ELEM_INDEX, cls_row_idx())
+            for i, (name, value) in enumerate(idx.items()):
+                w_field = self.create_field_element(col_idx=i, name=name, value=value, cls_kwargs=cls_idx_field)
+                self.add_children_layout([self.CHILD_ELEM_INDEX, name], w_field)
 
-        #index content
-        row_data = row_kwargs.get('row_data', None)
-        if row_data is not None:
-            # idx content
-            if cls_row_idx:
-                self.add_layout(self.CHILD_ELEM_INDEX, cls_row_idx())
-                v = row_kwargs['row_idx']
-                w_field = self.create_field_element(col_idx=0, name='-', value=v, cls_kwargs=cls_idx_elems)
-                self.add_children_layout(self.CHILD_ELEM_INDEX, w_field)
+        #data content
+        if cls_row_data:
+            self.add_layout(self.CHILD_ELEM_DATA, cls_row_data())
+            for i, (name, value) in enumerate(content.items()):
+                #print(self.__class__.__name__, "create_field_element", name, value)
+                layout_kwargs = {}
+                kwargs = dict(col_idx=i, name=name, value=value,   #set name and value same
+                              layout_kwargs=layout_kwargs, cls_kwargs=cls_data_field)
+                w_field = self.create_field_element(**kwargs)
+                self.add_children_layout([self.CHILD_ELEM_DATA, name], w_field)
 
-            #data content
-            if cls_row_data:
-                self.add_layout(self.CHILD_ELEM_DATA, cls_row_data())
-                #line_space = sum(map(lambda v: v.width, row_data))
-                for j, v in enumerate(row_data):
-                    #percent = elem.width / line_space
-                    #layout_kwargs = {'size_hint_x': percent}
-                    layout_kwargs = {}
-                    kwargs = dict(col_idx=j, name=v, value=v,   #set name and value same
-                                  layout_kwargs=layout_kwargs, cls_kwargs=cls_data_elems)
-                    w_field = self.create_field_element(**kwargs)
-                    self.add_children_layout(self.CHILD_ELEM_DATA, w_field)
-
-        self.index = index
-
-        #print(self.__class__.__name__, rv.data[index])
-        return super(WidgetRowElement, self).refresh_view_attrs(
-            rv, index, data)
-
-    # def refresh_view_attrs_old(self, rv, index, data):
-    #     ''' Catch and handle the view changes '''
-    #     #print(self.__class__.__name__, rv, index, data)
-    #
-    #     kwargs = data
-    #     w_row_kwargs = kwargs.get('w_row_kwargs')
-    #     #w_field_kwargs = kwargs.get('w_field_kwargs')
-    #     c_kwargs = kwargs.get('cls_kwargs')
-    #     cls_row_elem, cls_row_idx, cls_row_data = c_kwargs.get('class_row_elems')
-    #     cls_idx_elems = c_kwargs.get('class_idx_elems')
-    #     cls_data_elems = c_kwargs.get('class_data_elems')
-    #
-    #     super(WidgetRowT1Element, self).__init2__(**w_row_kwargs)
-    #
-    #     row_mm = w_row_kwargs.get('row_mm')
-    #     field_size = len(row_mm)
-    #
-    #     #print(self.__class__.__name__, row_mm)
-    #     if cls_data_elems:
-    #         self.add_layout(self.CHILD_ELEM_DATA, cls_row_data())
-    #         # pid = row_mm.get_field('type')
-    #         # addr = row_mm.get_field('start_address')
-    #         # size = row_mm.get_field('size_minus_one') + 1
-    #         # instances = row_mm.get_field('instances_minus_one') + 1
-    #         # num_report_ids = row_mm.get_field('num_report_ids') * instances
-    #         val = row_mm.values()
-    #         #print(self.__class__.__name__, val)
-    #         pid, addr, size, instances, num_report_ids = val
-    #         size = size + 1
-    #         instances = instances + 1
-    #         num_report_ids = num_report_ids * instances
-    #
-    #         if num_report_ids:
-    #             report_st = 1
-    #             for k, v in self.REPORT_ID_TABLE.items():
-    #                 if k == pid:
-    #                     break
-    #
-    #                 report_st += v
-    #
-    #             report_end = report_st + num_report_ids - 1
-    #             report_id = (report_st, report_end)
-    #         else:
-    #             report_id = None
-    #
-    #         if id not in self.REPORT_ID_TABLE.keys():
-    #             self.REPORT_ID_TABLE[pid] = num_report_ids
-    #
-    #         elem_values = (pid, addr, size, instances, report_id)
-    #
-    #     for j in range(field_size):
-    #         kwargs = dict(col_idx=j, value=elem_values[j], name=self.ROW_TITLE_DATA_NAME[j],
-    #                       cls_kwargs=cls_data_elems)
-    #         w_field = self.create_field_element(**kwargs)
-    #         self.add_children_layout(self.CHILD_ELEM_DATA, w_field)
-    #
-    #     self.index = index
-    #
-    #     #print(self.__class__.__name__, self.REPORT_ID_TABLE)
-    #
-    #     return super(WidgetRowElement, self).refresh_view_attrs(
-    #         rv, index, data)
+    def do_fresh(self, kwargs):
+        v_kwargs = kwargs.get('view_kwargs')
+        idx, content = v_kwargs.get('row_data')
+        for name, value in content.items():
+            layout = self.get_children_layout([self.CHILD_ELEM_DATA, name])
+            if layout:
+                layout.set_value(value)
 
 class WidgetT1RowTitleElement(WidgetT1RowElement):
     pass
+
+class WidgetT1PageContentRecycleBase(WidgetPageContentRecycleElement):
+    TITLE = (("n",), ("object", "address", "size", "instances", "report id"))
+
+    def build_row_data(self, values=None):
+        raw_data=[]
+        for i, name in enumerate(self.TITLE):
+            if values:
+                v = values[i]
+            else:
+                v = [None] * len(name)
+            d = OrderedDict(zip(name, v))
+            raw_data.append(d)
+
+        return raw_data
+
+class WidgetT1PageContentTitleElement(WidgetT1PageContentRecycleBase):
+    def __init__(self, id, row_elems, cls_kwargs, **layout_kwargs):
+        super(WidgetT1PageContentTitleElement, self).__init__()
+
+        #cls_row_elems = cls_kwargs.get('class_row_elems')
+        data = []
+        values = self.TITLE
+        row_data = self.build_row_data()
+        row_kwargs = {'view_attrs': {
+                        'view_kwargs': {'page_id': id, 'row_id': 0, 'row_data': row_data,},
+                        'cls_kwargs': cls_kwargs,
+                        'layout_kwargs': layout_kwargs}}
+        #row_kwargs = dict(page_id=id, row_id=0, raw_data=self.TITLE, cls_kwargs=cls_kwargs, layout_kwargs=layout_kwargs)
+        data.append(row_kwargs)
+
+        setattr(self, 'data', data)
+        setattr(self, 'viewclass', WidgetRecycleDataView)
+
+class WidgetT1PageContentDataElement(WidgetT1PageContentRecycleBase):
+    def __init__(self, id, row_elems, cls_kwargs, **layout_kwargs):
+        super(WidgetT1PageContentDataElement, self).__init__()
+        self.num_report_id_table = {}
+
+        #cls_row_elems = cls_kwargs.get('class_row_elems')
+        data = []
+        for i, row_elem in enumerate(row_elems):#row_elems is list store RowElementByte
+            # row_elem is RowElementByte, iter() is {name: ByteField}
+            rid, addr, size, instances, num_report_ids = row_elem.values()
+            size = size + 1
+            instances = instances + 1
+            num_report_ids = num_report_ids * instances
+            report_id = self.set_report_id_num(rid, num_report_ids)
+
+            values = ((i, ), (rid, addr, size, instances, report_id))
+            row_data = self.build_row_data(values)
+            row_kwargs = {'view_attrs': {
+                            'view_kwargs': {'page_id': id, 'row_id': i, 'row_data': row_data},
+                            'cls_kwargs': cls_kwargs,
+                            'layout_kwargs': layout_kwargs}}
+            #row_kwargs = dict(page_id=id, row_id=i, raw_data=values, cls_kwargs=cls_kwargs, layout_kwargs=layout_kwargs)
+            #print(self.__class__.__name__, row_kwargs)
+            data.append(row_kwargs)
+
+        setattr(self, 'data', data)
+        setattr(self, 'viewclass', WidgetRecycleDataView)
+
+    def set_report_id_num(self, rid, num_report_ids):
+        if num_report_ids:
+            report_st = 1
+            for k, v in self.num_report_id_table.items():
+                if k == rid:
+                    break
+
+                report_st += v
+
+            report_end = report_st + num_report_ids - 1
+            report_id = (report_st, report_end)
+        else:
+            report_id = None
+
+        if id not in self.num_report_id_table.keys():
+            self.num_report_id_table[rid] = num_report_ids
+
+        return report_id

@@ -17,6 +17,8 @@
 #from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 
 from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem, TabbedPanelHeader
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.recycleview import RecycleView
 from collections import OrderedDict
 from kivy.properties import BooleanProperty
 
@@ -24,13 +26,37 @@ from server.devinfo import Page
 from ui.TableElement import WidgetPageContentRecycleElement
 from ui.TableElement import WidgetPageBehavior, WidgetPageContentTitleElement, WidgetPageContentDataElement
 from ui.TableElement import WidgetRowTitleElement, WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement
-from ui.TableElement import WidgetFieldElement, WidgetFieldLabelName, WidgetFieldInputValue
+from ui.TableElement import WidgetFieldElement, WidgetFieldLabelName, WidgetFieldLabelValue, WidgetFieldInputValue
 from ui.TableElement import WidgetFieldIndexElement, WidgetFieldIndexName
 from ui.TableElementT1 import WidgetT1PageContentTitleElement, WidgetT1PageContentDataElement
 from ui.TableElementT1 import WidgetT1RowTitleElement, WidgetT1RowElement, WidgetT1FieldLabelValue
+from ui.TableElementT1 import WidgetFieldT1IndexName
 
 class WidgetFieldTitleName(WidgetFieldLabelName):
     pass
+
+class WidgetPageLayout(BoxLayout):
+
+    def do_layout(self, *largs):
+        # def walk_child(children, inst_type):
+        #     for child in children:
+        #         if isinstance(child, inst_type):
+        #             for sub_child in child.children:
+        #                 yield sub_child
+        #         else:
+        #             yield child
+        super(WidgetPageLayout, self).do_layout(*largs)
+
+    def add_widget(self, widget, index=0):
+        if isinstance(widget, RecycleView):
+            for child in widget.children:
+                widget.fbind('minimum_size_a', self._trigger_layout)
+        return super(WidgetPageLayout, self).add_widget(widget, index)
+
+    def remove_widget(self, widget):
+        if isinstance(widget, RecycleView):
+            widget.funbind('minimum_size_a', self._trigger_layout)
+        return super(WidgetPageLayout, self).remove_widget(widget)
 
 class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
     PAGE_CLS_LAYOUT_TABLE = {
@@ -39,26 +65,26 @@ class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
             'title': {
                 'class_content': WidgetT1PageContentTitleElement,
                 'class_row_elems': (WidgetT1RowTitleElement, WidgetRowIndexElement, WidgetRowDataElement),
-                'class_idx_elems': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
-                'class_data_elems': (WidgetFieldElement, WidgetFieldLabelName, None)},
+                'class_idx_field': (WidgetFieldIndexElement, WidgetFieldTitleName, None),
+                'class_data_field': (WidgetFieldElement, WidgetFieldTitleName, None)},
             'data': {
                 'class_content': WidgetT1PageContentDataElement,
                 'class_row_elems': (WidgetT1RowElement, WidgetRowIndexElement, WidgetRowDataElement),
-                'class_idx_elems': (WidgetFieldIndexElement, None, WidgetT1FieldLabelValue),
-                'class_data_elems': (WidgetFieldElement, None, WidgetT1FieldLabelValue)}
+                'class_idx_field': (WidgetFieldIndexElement, None, WidgetT1FieldLabelValue),
+                'class_data_field': (WidgetFieldElement, None, WidgetT1FieldLabelValue)}
         },
 
         'default': {
             'title': {
                 'class_content': WidgetPageContentTitleElement,
                 'class_row_elems': (WidgetRowTitleElement, WidgetRowIndexElement, WidgetRowDataElement),
-                'class_idx_elems': (WidgetFieldIndexElement, WidgetFieldTitleName, None),
-                'class_data_elems': (WidgetFieldElement, WidgetFieldTitleName, None)},
+                'class_idx_field': (WidgetFieldIndexElement, WidgetFieldTitleName, None),
+                'class_data_field': (WidgetFieldElement, WidgetFieldTitleName, None)},
             'data': {
                 'class_content': WidgetPageContentDataElement,
                 'class_row_elems': (WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement),
-                'class_idx_elems': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
-                'class_data_elems': (WidgetFieldElement, WidgetFieldLabelName, WidgetFieldInputValue)}
+                'class_idx_field': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
+                'class_data_field': (WidgetFieldElement, WidgetFieldLabelName, WidgetFieldLabelValue)}
         }
     }
 
@@ -245,7 +271,7 @@ if __name__ == '__main__':
             v_chip_id = array.array('B', [164, 24, 16, 170, 32, 20, 40])
             chip = ChipMemoryMap.get_chip_mmap(v_chip_id)
             page_mmap = chip.get_mem_map_tab(Page.ID_INFORMATION)
-            root.create_page_element(page_mmap)
+            #root.create_page_element(page_mmap)
 
             v_block_info = array.array('B',
                   [117, 250, 0, 214, 5, 0, 37, 4, 6, 129, 0, 0, 44, 134, 6, 0, 0, 0, 5, 135, 6, 10, 0, 0, 6, 146, 6, 6,
@@ -260,7 +286,7 @@ if __name__ == '__main__':
 
             page_mmap = chip.get_mem_map_tab(Page.OBJECT_TABLE)
             page_mmap.set_values(v_block_info)
-            root.create_page_element(page_mmap)
+            #root.create_page_element(page_mmap)
 
             def sort_key(mm):
                 major, inst = mm.id()
@@ -274,12 +300,13 @@ if __name__ == '__main__':
 
             chip.create_chip_mmap_pages()
             all_page_mmaps = chip.get_mem_map_tab()
-            for mmap in sorted(all_page_mmaps.values(), key=sort_key)[:5]:
+            for mmap in sorted(all_page_mmaps.values(), key=sort_key)[1:2]:
                 page_id = mmap.id()
                 widget = root.get_element(page_id)
                 if not widget:
-                    value = array.array('B', range(mmap.get_value_size()))
-                    mmap.set_values(value)
+                    if not mmap.valid():
+                        value = array.array('B', range(mmap.get_value_size()))
+                        mmap.set_values(value)
                     widget = root.create_page_element(mmap)
                     #widget.do_fresh(mmap)
 
