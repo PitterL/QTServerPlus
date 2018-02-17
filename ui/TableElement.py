@@ -106,7 +106,10 @@ class WidgetFieldLabelBase(Label):
         super(WidgetFieldLabelBase, self).__init__(text=self.covert_to_text(), **kwargs)
 
     def __str__(self):
-        return "{} row {} col {} val {} type {}".format(self.__class__.__name__, self.row, self.col, self._val, self._type)
+        return "{} [row {}] [col {}] [type {}]: {} ".format(self.__class__.__name__, self.row, self.col, self._type, self._val)
+
+    def __repr__(self):
+        return super(WidgetFieldLabelBase, self).__repr__() + self.__str__()
 
     def type(self):
         return self._type
@@ -185,11 +188,20 @@ class LayerBoxLayout(BoxLayout):
         super(LayerBoxLayout, self).__init__(*args, **kwargs)
         self.__layout = {}
 
+    def __str__(self):
+        text = self.__class__.__name__
+        text += "[size{}] [minimum_size{}]".format(self.size, self.minimum_size)
+        return text
+
     def __iter__(self):
         return iter(self.__layout)
 
     def __len__(self):
         return len(self.__layout)
+
+    # def do_layout(self, *largs):
+    #     print(self.__class__.__name__, self, self.size, self.minimum_size)
+    #     super(LayerBoxLayout, self).do_layout(*largs)
 
     def get_layout(self, name):
         return self.__layout.get(name, None)
@@ -260,26 +272,15 @@ class WidgetFieldElement(LayerBoxLayout):
         #print(__class__.__name__, self.children)
 
     def __str__(self):
-        text = super(WidgetFieldElement, self).__str__()
-        text += "\n".join(map(str, self.children))
+        #text = super(WidgetFieldElement, self).__str__()
+        text = self.__class__.__name__
+        if self.children:
+            text += "\n\t"
+            text += "\n\t".join(map(str, self.children))
         return text
-    #
-    # def get_layout(self, name):
-    #     return self.__layout.get(name, None)
-    #
-    # def add_layout(self, name, widget):
-    #     self.__layout[name] = widget
-    #     self.add_widget(widget)
-    #
-    # def clear_layout(self):
-    #     #print(self.__class__.__name__, "clear layout", self.__layout)
-    #     self.__layout.clear()
-    #     self.clear_widgets()
 
-    # def field_type(self, type):
-    #     for field_t in self.children:
-    #         if field_t.is_type(type):
-    #             return field_t
+    def __repr__(self):
+        return super(WidgetFieldElement, self).__repr__() + self.__str__()
 
     def set_value(self, value):
         for child in self.children:
@@ -322,22 +323,16 @@ class WidgetRowElementBase(RecycleDataViewBehavior, LayerBoxLayout):
         self.__row_idx = row_id
         super(WidgetRowElementBase, self).__init__(**kwargs)
 
-    # def __init2__(self, page_id, row_id, layout_kwargs=None):
-    #     #print(self.__class__.__name__, "__init2__", layout_kwargs)
-    #     #assert not self.inited()
-    #
-    #     self.__page_id = page_id
-    #     self.__row_idx = row_id
-    #
-    #     if layout_kwargs:
-    #         for k, v in layout_kwargs:
-    #             setattr(self, k, v)
-    #
-    # def _create_view(self, rv, index, data):
-    #     pass
+    def __str__(self):
+        text = self.__class__.__name__
+        text += "[page{}] [row {}]".format(self.__page_id, self.__row_idx)
+        if self.children:
+            text += "\n\t"
+            text += "\n\t".join(map(str, self.children))
+        return text
 
     def __repr__(self):
-        return super(WidgetRowElementBase, self).__repr__() + "{} {}".format(self.__page_id, self.__row_idx)
+        return super(WidgetRowElementBase, self).__repr__() + self.__str__()
 
     def inited(self):
         return len(self) > 0
@@ -388,10 +383,9 @@ class WidgetRowElementBase(RecycleDataViewBehavior, LayerBoxLayout):
 class WidgetRowElement(WidgetRowElementBase):
 
     #def _create_view(self, rv, index, data):
-    def __init__(self, rv, index, data):
+    def __init__(self, **kwargs):
 
-        kwargs = data['view_attrs']
-
+        #v_kwargs = view_attrs.get('view_kwargs')
         v_kwargs = kwargs.get('view_kwargs')
         page_id = v_kwargs.get('page_id')
         row_id = v_kwargs.get('row_id')
@@ -429,11 +423,13 @@ class WidgetRowElement(WidgetRowElementBase):
                 w_field = self.create_field_element(**kwargs)
                 self.add_children_layout([self.CHILD_ELEM_DATA, name], w_field)
 
-    def do_fresh(self, kwargs):
+    def do_fresh(self, **kwargs):
         #page_id = kwargs.get('page_id')
         #row_id = kwargs.get('row_id')
-        v_kwargs = kwargs.get('view_kwargs')
-        row_elem = v_kwargs.get('row_elem')
+        #v_kwargs = kwargs.get('view_kwargs')
+        #v_kwargs = view_kwargs
+        #row_elem = v_kwargs.get('row_elem')
+        row_elem = kwargs.get('row_elem')
 
         # if row_mm.idx_elems:
         #     layout = self.get_layout(self.CHILD_ELEM_INDEX)
@@ -450,16 +446,70 @@ class WidgetRowElement(WidgetRowElementBase):
 class WidgetRowTitleElement(WidgetRowElement):
     pass
 
+class WidgetRecycleDataView(RecycleDataViewBehavior, LayerBoxLayout):
+    def __str__(self):
+        text = self.__class__.__name__
+        if self.children:
+            text += "\n\t"
+            text += "\n\t".join(map(str, self.children))
+        return text
+
+    def __repr__(self):
+        return super(WidgetRecycleDataView, self).__repr__() + self.__str__()
+
+    """cache each item"""
+    def refresh_view_attrs(self, rv, index, data):
+        #print(self.__class__.__name__, index, kwargs)
+        kwargs = data['view_attrs']
+
+        v_kwargs = kwargs.get('view_kwargs')
+        page_id = v_kwargs.get('page_id')
+        row_id = v_kwargs.get('row_id')
+
+        c_kwargs = kwargs.get('cls_kwargs')
+        cls_row_elem, _, _ = c_kwargs.get('class_row_elems')
+
+        wid = (page_id, row_id)
+        w = self.get_layout(wid)
+        if w:
+            w.do_fresh(**v_kwargs)
+        else:
+            self.detach_layout()
+            w = rv.get_view(wid)
+            if w:
+                w.do_fresh(**v_kwargs)
+                if w.parent:
+                    w.parent.remove_layout(wid)
+            else:
+                w = cls_row_elem(**kwargs)
+                rv.save(wid, w)
+
+            self.add_layout(wid, w)
+
+        self.index = index
+        return super(WidgetRecycleDataView, self).refresh_view_attrs(rv, index, data)
+
+    def refresh_view_layout(self, rv, index, layout, viewport):
+        return super(WidgetRecycleDataView, self).refresh_view_layout(rv, index, layout, viewport)
+
+    # def on_size(self, *args):
+    #     print(self.__class__.__name__, "size", args)
+    #     if self.children:
+    #         print(self.__class__.__name__, "child", self.children[0].size, self.children[0].minimum_size)
+
 class SelectableRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
                                  RecycleBoxLayout):
     ''' Adds selection and focus behaviour to the view. '''
     def on_size(self, *args):
         #print(self.__class__.__name__, "on_size", args)
         pass
-#class RecycleDataAdapter2(RecycleDataAdapter):
+
+    # def do_layout(self, *largs):
+    #     super(SelectableRecycleBoxLayout, self).do_layout(*largs)
+    #     print(self.__class__.__name__, "do_layout", self.size, self.minimum_size)
 
 class WidgetPageContentRecycleElement(RecycleView):
-    minimum_size_a = ListProperty([0, 0])
+    #minimum_size_a = ListProperty([0, 0])
 
     def __init__(self, **kwargs):
         super(WidgetPageContentRecycleElement, self).__init__(**kwargs)
@@ -477,55 +527,18 @@ class WidgetPageContentRecycleElement(RecycleView):
             del self.__cache[name]
             return w
 
-    def update_size(self, inst, size):
-        #print(self.__class__.__name__, "update_size", inst, "child:", size, "self", self.size)
-        self.minimum_size_a = size
-        w, h = size
-        if self.height > h:
-            self.height = h
-        if self.width > w:
-            self.width = w
+    # def update_size(self, inst, size):
+    #     #print(self.__class__.__name__, "update_size", inst, "child:", size, "self", self.size)
+    #     self.minimum_size_a = size
+    #     w, h = size
+    #     if self.height > h:
+    #         self.height = h
+    #     if self.width > w:
+    #         self.width = w
 
-    def add_widget(self, widget, index=0):
-        widget.bind(size=self.update_size)
-        super().add_widget(widget, index)
-
-class WidgetRecycleDataView(RecycleDataViewBehavior, LayerBoxLayout):
-
-    def refresh_view_attrs(self, rv, index, data):
-        #print(self.__class__.__name__, index, kwargs)
-        kwargs = data['view_attrs']
-
-        v_kwargs = kwargs.get('view_kwargs')
-        page_id = v_kwargs.get('page_id')
-        row_id = v_kwargs.get('row_id')
-
-        c_kwargs = kwargs.get('cls_kwargs')
-        cls_row_elem, _, _ = c_kwargs.get('class_row_elems')
-
-        wid = (page_id, row_id)
-        w = self.get_layout(wid)
-        if w:
-            w.do_fresh(kwargs)
-        else:
-            self.detach_layout()
-            w = rv.get_view(wid)
-            if w:
-                w.do_fresh(kwargs)
-                if w.parent:
-                    w.parent.remove_layout(wid)
-            else:
-                w = cls_row_elem(rv, index, data)
-                #w._create_view(rv, index, data)
-                rv.save(wid, w)
-
-            self.add_layout(wid, w)
-
-        self.index = index
-        return super(WidgetRecycleDataView, self).refresh_view_attrs(rv, index, data)
-
-    def refresh_view_layout(self, rv, index, layout, viewport):
-        return super(WidgetRecycleDataView, self).refresh_view_layout(rv, index, layout, viewport)
+    # def add_widget(self, widget, index=0):
+    #     widget.bind(size=self.update_size)
+    #     super().add_widget(widget, index)
 
 class WidgetPageContentBaseElement(WidgetPageContentRecycleElement):
     def __init__(self, id, row_elems, cls_kwargs, **layout_kwargs):
@@ -545,8 +558,15 @@ class WidgetPageContentBaseElement(WidgetPageContentRecycleElement):
         setattr(self, 'data', data)
         setattr(self, 'viewclass', WidgetRecycleDataView)
 
-class WidgetPageContentTitleElement(WidgetPageContentBaseElement):
-    pass
+class WidgetPageContentTitleElement(LayerBoxLayout):
+    def __init__(self, id, row_elems, cls_kwargs, **layout_kwargs):
+        super(WidgetPageContentTitleElement, self).__init__()
+
+        cls_row_elem, _, _ = cls_kwargs.get('class_row_elems')
+        for i, row_elem in enumerate(row_elems):
+            view_kwargs = {'page_id': id, 'row_id': i, 'row_elem': row_elem}
+            widget = cls_row_elem(view_kwargs=view_kwargs, cls_kwargs=cls_kwargs, layout_kwargs=layout_kwargs)
+            self.add_layout(i, widget)
 
 class WidgetPageContentDataElement(WidgetPageContentBaseElement):
     pass

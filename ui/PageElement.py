@@ -36,27 +36,27 @@ class WidgetFieldTitleName(WidgetFieldLabelName):
     pass
 
 class WidgetPageLayout(BoxLayout):
-
-    def do_layout(self, *largs):
-        # def walk_child(children, inst_type):
-        #     for child in children:
-        #         if isinstance(child, inst_type):
-        #             for sub_child in child.children:
-        #                 yield sub_child
-        #         else:
-        #             yield child
-        super(WidgetPageLayout, self).do_layout(*largs)
-
-    def add_widget(self, widget, index=0):
-        if isinstance(widget, RecycleView):
-            for child in widget.children:
-                widget.fbind('minimum_size_a', self._trigger_layout)
-        return super(WidgetPageLayout, self).add_widget(widget, index)
-
-    def remove_widget(self, widget):
-        if isinstance(widget, RecycleView):
-            widget.funbind('minimum_size_a', self._trigger_layout)
-        return super(WidgetPageLayout, self).remove_widget(widget)
+    pass
+    # def do_layout(self, *largs):
+    #     # def walk_child(children, inst_type):
+    #     #     for child in children:
+    #     #         if isinstance(child, inst_type):
+    #     #             for sub_child in child.children:
+    #     #                 yield sub_child
+    #     #         else:
+    #     #             yield child
+    #     super(WidgetPageLayout, self).do_layout(*largs)
+    #
+    # def add_widget(self, widget, index=0):
+    #     if isinstance(widget, RecycleView):
+    #         for child in widget.children:
+    #             widget.fbind('minimum_size_a', self._trigger_layout)
+    #     return super(WidgetPageLayout, self).add_widget(widget, index)
+    #
+    # def remove_widget(self, widget):
+    #     if isinstance(widget, RecycleView):
+    #         widget.funbind('minimum_size_a', self._trigger_layout)
+    #     return super(WidgetPageLayout, self).remove_widget(widget)
 
 class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
     PAGE_CLS_LAYOUT_TABLE = {
@@ -227,7 +227,7 @@ class PageElementRoot(TabbedPanel):
         widget = parent_widget.get_element(page_id)
         if not widget:
             widget = WidgetPageElement(page_mm)
-            parent_widget.add_element(major, widget)
+            parent_widget.add_element(page_id, widget)
 
         return widget
 
@@ -300,7 +300,7 @@ if __name__ == '__main__':
 
             chip.create_chip_mmap_pages()
             all_page_mmaps = chip.get_mem_map_tab()
-            for mmap in sorted(all_page_mmaps.values(), key=sort_key)[1:2]:
+            for mmap in sorted(all_page_mmaps.values(), key=sort_key):
                 page_id = mmap.id()
                 widget = root.get_element(page_id)
                 if not widget:

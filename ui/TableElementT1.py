@@ -1,4 +1,4 @@
-from ui.TableElement import WidgetRecycleDataView, WidgetPageContentRecycleElement
+from ui.TableElement import WidgetRecycleDataView, SelectableRecycleBoxLayout, WidgetPageContentRecycleElement
 from ui.TableElement import  WidgetRowElementBase
 from ui.TableElement import LayerBoxLayout, WidgetFieldLabelValue
 
@@ -34,9 +34,9 @@ class WidgetT1RowElement(WidgetRowElementBase):
     ROW_TITLE_DATA_NAME = ('TYPE', 'ADDR', 'SIZE', 'INSTANCES', 'REPORT ID')
 
     #def _create_view(self, rv, index, data):
-    def __init__(self, rv, index, data):
+    def __init__(self, **kwargs):
 
-        kwargs = data['view_attrs']
+        #kwargs = data['view_attrs']
 
         v_kwargs = kwargs.get('view_kwargs')
         page_id = v_kwargs.get('page_id')
@@ -71,9 +71,11 @@ class WidgetT1RowElement(WidgetRowElementBase):
                 w_field = self.create_field_element(**kwargs)
                 self.add_children_layout([self.CHILD_ELEM_DATA, name], w_field)
 
-    def do_fresh(self, kwargs):
-        v_kwargs = kwargs.get('view_kwargs')
-        idx, content = v_kwargs.get('row_data')
+    def do_fresh(self, **kwargs):
+        #v_kwargs = kwargs.get('view_kwargs')
+        #idx, content = v_kwargs.get('row_data')
+        idx, content = kwargs.get('row_data')
+
         for name, value in content.items():
             layout = self.get_children_layout([self.CHILD_ELEM_DATA, name])
             if layout:
@@ -82,10 +84,10 @@ class WidgetT1RowElement(WidgetRowElementBase):
 class WidgetT1RowTitleElement(WidgetT1RowElement):
     pass
 
-class WidgetT1PageContentRecycleBase(WidgetPageContentRecycleElement):
+class WidgetT1RowElementPacking(object):
     TITLE = (("n",), ("object", "address", "size", "instances", "report id"))
 
-    def build_row_data(self, values=None):
+    def build_row_data(self, values):
         raw_data=[]
         for i, name in enumerate(self.TITLE):
             if values:
@@ -97,25 +99,28 @@ class WidgetT1PageContentRecycleBase(WidgetPageContentRecycleElement):
 
         return raw_data
 
-class WidgetT1PageContentTitleElement(WidgetT1PageContentRecycleBase):
+class WidgetT1PageContentTitleElement(WidgetT1RowElementPacking, LayerBoxLayout):
     def __init__(self, id, row_elems, cls_kwargs, **layout_kwargs):
         super(WidgetT1PageContentTitleElement, self).__init__()
 
-        #cls_row_elems = cls_kwargs.get('class_row_elems')
-        data = []
+        cls_row_elem, _, _ = cls_kwargs.get('class_row_elems')
+        #data = []
         values = self.TITLE
-        row_data = self.build_row_data()
-        row_kwargs = {'view_attrs': {
-                        'view_kwargs': {'page_id': id, 'row_id': 0, 'row_data': row_data,},
-                        'cls_kwargs': cls_kwargs,
-                        'layout_kwargs': layout_kwargs}}
+        row_data = self.build_row_data(None)
+        # row_kwargs = {'view_attrs': {
+        #                 'view_kwargs': {'page_id': id, 'row_id': 0, 'row_data': row_data,},
+        #                 'cls_kwargs': cls_kwargs,
+        #                 'layout_kwargs': layout_kwargs}}
+        view_kwargs = {'page_id': id, 'row_id': 0, 'row_data': row_data, }
+        widget = cls_row_elem(view_kwargs=view_kwargs, cls_kwargs=cls_kwargs, layout_kwargs=layout_kwargs)
+        self.add_layout(-1, widget)
         #row_kwargs = dict(page_id=id, row_id=0, raw_data=self.TITLE, cls_kwargs=cls_kwargs, layout_kwargs=layout_kwargs)
-        data.append(row_kwargs)
+        #data.append(row_kwargs)
 
-        setattr(self, 'data', data)
-        setattr(self, 'viewclass', WidgetRecycleDataView)
+        #setattr(self, 'data', data)
+        #setattr(self, 'viewclass', WidgetRecycleDataView)
 
-class WidgetT1PageContentDataElement(WidgetT1PageContentRecycleBase):
+class WidgetT1PageContentDataElement(WidgetT1RowElementPacking, WidgetPageContentRecycleElement):
     def __init__(self, id, row_elems, cls_kwargs, **layout_kwargs):
         super(WidgetT1PageContentDataElement, self).__init__()
         self.num_report_id_table = {}
@@ -161,3 +166,6 @@ class WidgetT1PageContentDataElement(WidgetT1PageContentRecycleBase):
             self.num_report_id_table[rid] = num_report_ids
 
         return report_id
+
+class WidgetT1PageSelectableRecycleBoxLayout(SelectableRecycleBoxLayout):
+    pass

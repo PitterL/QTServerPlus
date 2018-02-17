@@ -55,8 +55,6 @@
     #bold: True
 
 <WidgetFieldTitleName>
-    #size_hint_y: None
-    #height: DEFAULT_LABLE_SIZE
     font_name: "font/arialbd.ttf"
     font_size: '15sp'
     color: 1, 1, 1, 1
@@ -72,46 +70,22 @@
 
 <WidgetFieldElement>
     orientation:'vertical'
-    #size_hint_y: None
-    #height: self.minimum_height
-    #on_height: print("WidgetFieldElement", self.height)
 
 <WidgetFieldIndexElement>
     idx_size_hint: 0.35
-    #size_hint_y: None
-    #height: self.minimum_height
 
 <WidgetRowDataElement>
-    orientation: 'horizontal'
-    #size_hint_y: None
-    #height: self.minimum_height
-    #on_height: print("WidgetFieldElement", self.height)
 
 <WidgetRowIndexElement>
     size_hint: 0.2, None
-    #height: self.minimum_height
 
 <WidgetRowElementBase>
-    #size_hint_y: None
-    #height: self.minimum_height
-    orientation: 'horizontal'
 
 <WidgetRowTitleElement>
-    #size_hint_y: None
-    #height: self.minimum_height
-    #on_height: print("WidgetRowTitleElement", self.height)
 
 <WidgetRowElement>
-    #size_hint_y: None
-    #height: self.minimum_height
-    # Draw a background to indicate selection
-    #on_height: print("WidgetRowElement", self.height)
 
 <WidgetRecycleDataView>
-    #size_hint_y: None
-    #height: self.minimum_height
-
-<SelectableRecycleBoxLayout>
 
 #:import OpacityScrollEffect kivy.effects.opacityscroll.OpacityScrollEffect
 <WidgetPageContentRecycleElement>
@@ -120,9 +94,9 @@
     scroll_wheel_distance: 100
     bar_width:'9dp'
     #viewclass: 'WidgetRowElement'
-    SelectableRecycleBoxLayout:
+    SelectableRecycleBoxLayout
         id: content
-        default_size: None, DEFAULT_LABLE_SIZE * 2
+        default_size: None, DEFAULT_LABLE_SIZE*2
         default_size_hint: 1, None
         #default_size_hint: 1, 1
         size_hint_y: None
