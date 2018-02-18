@@ -2,7 +2,6 @@
     tab_pos: 'left_top'
     tab_width: 35
     tab_height: 30
-    #size_hint_x: 0.8
     pos_hint: {'center_x': .5, 'center_y': .5}
     do_default_tab: False
 
@@ -24,8 +23,6 @@
         do_default_tab: False
 
 <WidgetPageElement>:
-    #height: self.minimum_height
-    #size_hint: (1, 1)
     canvas.after:
         Color:
             rgba: (0.7, 1, 0.8, 0.6) if self.selected else (0.8, 1, 0.7, 0.6)
@@ -36,11 +33,6 @@
     WidgetPageLayout:
         id: content
         orientation:'vertical'
-        #size_hint: 1, 1
-        #size_hint_y: None
-        #height: self.minimum_height
-        #on_height: print(self.__class__.__name__, self.size)
-        #size: self.minimum_size
 
 
 

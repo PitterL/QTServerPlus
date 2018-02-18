@@ -9,7 +9,6 @@ from server.devinfo import Page, ObjectTableElement
 
 class RowElement(object):
     #Page 1, 3 .... row layout( Filed unit is 'bit', 1 byte each row)
-    RSV_NAME = ('rsv', 'reserved')
     MAX_FIELD_SIZE = 8
 
     class BitField(object):
@@ -28,7 +27,6 @@ class RowElement(object):
         self.idx_desc = row_desc.idx
         self.content_desc = row_desc.content
         self.fields = OrderedDict()
-        self.seq_rsv = 0
         self._pos = 0   #store filed relative pos in initilize
         self.value_size = self.MAX_FIELD_SIZE // 8
 
@@ -63,10 +61,6 @@ class RowElement(object):
         return [field.value for field in self.fields.values()]
 
     def add_field(self, name, width):
-        if name.lower() in RowElement.RSV_NAME: #cover rsv name with a seq suffix
-            name = RowElement.RSV_NAME[0] + str(self.seq_rsv)
-            self.seq_rsv += 1
-
         if name not in self.fields.keys():  #Input filed order from Bit 7 to Bit 0
             self.fields[name] = RowElement.BitField(RowElement.MAX_FIELD_SIZE - self._pos - width, width)
             self._pos += width
@@ -452,6 +446,9 @@ class PagesMemoryMap(object):
     MESSAGE_EXTRA_INFO_TABLE = {100: ["First Report ID", "Second Report ID", "Subsequent Touch Report IDs"]}
     SIZE_ROW_IDX_ELEM = 2
 
+    SKIP_CONFIG_DESC = [117, 37, 5, 68, 71, 25, 56, 110]
+    SKIP_MESSAGE_DESC = []
+
     def __init__(self, chip_id, product_doc=None):
         self.mem_map = OrderedDict()
         self.msg_map = dict()
@@ -479,12 +476,22 @@ class PagesMemoryMap(object):
         return desc
 
     def _parse_desc(self, table, size, fn_check_result, pat_name):
+        RSV_NAME = ('rsv', 'reserved')
+        def replace_rsv(row_elem, old, new, seq):
+            for i in range(len(row_elem)):
+                elem = row_elem[i]
+                if elem[0].lower() in old:
+                    elem[0] = new + str(seq)
+                    seq += 1
+            return seq
+
         if not table:
             return
 
         split_row_content = lambda row_value: (row_value[:self.SIZE_ROW_IDX_ELEM], row_value[self.SIZE_ROW_IDX_ELEM:])
         get_row_id = lambda idx: idx[0]
         get_data_elem_length = lambda elem: sum(map(lambda e: e[1], elem))
+        seq_i = seq_e = 0
 
         for k, v in table.items():
             result = pat_name.match(k)
@@ -505,12 +512,17 @@ class PagesMemoryMap(object):
                         try:
                             st, end = map(int, result)
                             for id in range(st, end + 1):
-                                idx_new = [(str(id), row_id[1])].extend(idx[1:])
+                                idx_new = [(str(id), row_id[1])]
+                                idx_new.extend(idx[1:])
+                                seq_i = replace_rsv(idx_new, RSV_NAME, 'Reserved', seq_i)
+                                seq_e = replace_rsv(elem, RSV_NAME, 'RSV ', seq_e)
                                 desc.add_content(idx_new, elem)
                         except:
                             print("Falied split row id:", v[i])
                             break
                     else:
+                        seq_i = replace_rsv(idx, RSV_NAME, 'Reserved', seq_i)
+                        seq_e = replace_rsv(elem, RSV_NAME, 'RSV ', seq_e)
                         desc.add_content(idx, elem)
 
                 if size is not None:
@@ -533,9 +545,12 @@ class PagesMemoryMap(object):
                 if not einfo or einfo == str(inst_id):
                     return True
 
+        desc = None
         reg_id, inst_id = page_id
-        fn_check_result = partial(check_result, reg_id, inst_id)
-        desc = self._parse_desc(self._doc, size, fn_check_result, self.PATTERN_CONFIG_TABLE_NAME)
+        if reg_id not in self.SKIP_CONFIG_DESC:
+            fn_check_result = partial(check_result, reg_id, inst_id)
+            desc = self._parse_desc(self._doc, size, fn_check_result, self.PATTERN_CONFIG_TABLE_NAME)
+
         if not desc:
             desc = self.build_default_desc(size)
         return desc
@@ -557,10 +572,12 @@ class PagesMemoryMap(object):
                 einfo = get_extra_info(self.MESSAGE_EXTRA_INFO_TABLE, reg_id, rrid)
                 if not einfo or einfo == result.group(3):
                     return True
-
+        desc = None
         reg_id, inst_id = page_id
-        fn_check_result = partial(check_result, reg_id, rrid)
-        desc = self._parse_desc(self._doc, None, fn_check_result, self.PATTERN_MESSAGE_TABLE_NAME)
+        if reg_id not in self.SKIP_MESSAGE_DESC:
+            fn_check_result = partial(check_result, reg_id, rrid)
+            desc = self._parse_desc(self._doc, None, fn_check_result, self.PATTERN_MESSAGE_TABLE_NAME)
+
         if not desc:
             print("No found message desc for page {} report_id {}".format(page_id, rrid))
             desc = self.build_default_desc(default_size)

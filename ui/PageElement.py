@@ -27,36 +27,13 @@ from ui.TableElement import WidgetPageContentRecycleElement
 from ui.TableElement import WidgetPageBehavior, WidgetPageContentTitleElement, WidgetPageContentDataElement
 from ui.TableElement import WidgetRowTitleElement, WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement
 from ui.TableElement import WidgetFieldElement, WidgetFieldLabelName, WidgetFieldLabelValue, WidgetFieldInputValue
-from ui.TableElement import WidgetFieldIndexElement, WidgetFieldIndexName
+from ui.TableElement import WidgetFieldIndexElement, WidgetFieldIndexName, WidgetFieldTitleName
 from ui.TableElementT1 import WidgetT1PageContentTitleElement, WidgetT1PageContentDataElement
 from ui.TableElementT1 import WidgetT1RowTitleElement, WidgetT1RowElement, WidgetT1FieldLabelValue
 from ui.TableElementT1 import WidgetFieldT1IndexName
 
-class WidgetFieldTitleName(WidgetFieldLabelName):
-    pass
-
 class WidgetPageLayout(BoxLayout):
     pass
-    # def do_layout(self, *largs):
-    #     # def walk_child(children, inst_type):
-    #     #     for child in children:
-    #     #         if isinstance(child, inst_type):
-    #     #             for sub_child in child.children:
-    #     #                 yield sub_child
-    #     #         else:
-    #     #             yield child
-    #     super(WidgetPageLayout, self).do_layout(*largs)
-    #
-    # def add_widget(self, widget, index=0):
-    #     if isinstance(widget, RecycleView):
-    #         for child in widget.children:
-    #             widget.fbind('minimum_size_a', self._trigger_layout)
-    #     return super(WidgetPageLayout, self).add_widget(widget, index)
-    #
-    # def remove_widget(self, widget):
-    #     if isinstance(widget, RecycleView):
-    #         widget.funbind('minimum_size_a', self._trigger_layout)
-    #     return super(WidgetPageLayout, self).remove_widget(widget)
 
 class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
     PAGE_CLS_LAYOUT_TABLE = {

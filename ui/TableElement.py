@@ -155,13 +155,15 @@ class WidgetFieldLabelName(WidgetFieldLabelBase):
         super(WidgetFieldLabelName, self).__init__(row, col, v, self.TYPE_NAME, **kwargs)
         self._type = self.TYPE_NAME
 
+class WidgetFieldTitleName(WidgetFieldLabelName):
+    pass
+
 class WidgetFieldLabelValue(WidgetFieldLabelBase):
     def __init__(self, row, col, v):
         super(WidgetFieldLabelValue, self).__init__(row, col, v, self.TYPE_VALUE)
         self._type = self.TYPE_VALUE
 
 from ui.DebugView import ElemValVar2, ElemValVarBase
-#WidgetFieldElemBehavior
 
 class WidgetFieldInputValue(ElemValVar2):
     (TYPE_NAME, TYPE_VALUE) = ('NAME', 'VALUE')
@@ -187,6 +189,7 @@ class LayerBoxLayout(BoxLayout):
     def __init__(self, *args, **kwargs):
         super(LayerBoxLayout, self).__init__(*args, **kwargs)
         self.__layout = {}
+        self.prop_set_default_minimum_height = True
 
     def __str__(self):
         text = self.__class__.__name__
@@ -199,9 +202,22 @@ class LayerBoxLayout(BoxLayout):
     def __len__(self):
         return len(self.__layout)
 
+    # def on_size(self, *args):
+    #     print(self.__class__.__name__, "on_size", args)
+
     # def do_layout(self, *largs):
     #     print(self.__class__.__name__, self, self.size, self.minimum_size)
     #     super(LayerBoxLayout, self).do_layout(*largs)
+
+    def set_default_minimum_height(self):
+        shw, shh = self.size_hint
+        if not shh:
+            if self.children:
+                if self.orientation == 'horizontal':
+                    height = self.children[0].height
+                else:
+                    height = sum([child.height for child in self.children])
+                self.minimum_height = height
 
     def get_layout(self, name):
         return self.__layout.get(name, None)
@@ -209,6 +225,11 @@ class LayerBoxLayout(BoxLayout):
     def add_layout(self, name, widget):
         self.__layout[name] = widget
         self.add_widget(widget)
+
+        # RecycleView has some bug for fresh height = self.minimum_height, we should adjust it may manually
+        # so we should as the order, all children are created first, then added to parent widget
+        if self.prop_set_default_minimum_height:
+            self.set_default_minimum_height()
 
     def remove_layout(self, name):
         if name in self.__layout.keys():
@@ -248,17 +269,13 @@ class LayerBoxLayout(BoxLayout):
 class WidgetFieldElement(LayerBoxLayout):
     def __init__(self, **kwargs):
         #print(self.__class__.__name__, kwargs)
-        #self.__layout = {}
         self.row =  kwargs.get('row_idx')
         self.col = kwargs.get('col_idx')
         name = kwargs.get('name', None)
         value = kwargs.get('value', None)
         cls_field_name = kwargs.get('class_field_name')
         cls_field_value = kwargs.get('class_field_value')
-        #cls_field_elem, cls_field_name, cls_field_value = kwargs.get('cls_kwargs')
         layout_kwargs = kwargs.get('layout_kwargs', dict())
-
-        #print(self.__class__.__name__, layout_kwargs)
         super(WidgetFieldElement, self).__init__(**layout_kwargs)
 
         if cls_field_name:
@@ -269,10 +286,7 @@ class WidgetFieldElement(LayerBoxLayout):
             w = cls_field_value(self.row, self.col, value)
             self.add_layout(w.type(), w)
 
-        #print(__class__.__name__, self.children)
-
     def __str__(self):
-        #text = super(WidgetFieldElement, self).__str__()
         text = self.__class__.__name__
         if self.children:
             text += "\n\t"
@@ -382,10 +396,8 @@ class WidgetRowElementBase(RecycleDataViewBehavior, LayerBoxLayout):
 
 class WidgetRowElement(WidgetRowElementBase):
 
-    #def _create_view(self, rv, index, data):
     def __init__(self, **kwargs):
 
-        #v_kwargs = view_attrs.get('view_kwargs')
         v_kwargs = kwargs.get('view_kwargs')
         page_id = v_kwargs.get('page_id')
         row_id = v_kwargs.get('row_id')
@@ -394,7 +406,6 @@ class WidgetRowElement(WidgetRowElementBase):
         c_kwargs = kwargs.get('cls_kwargs')
         l_kwargs =  kwargs.get('layout_kwargs', dict())
 
-        #self.__init2__(page_id, row_id, l_kwargs)
         super(WidgetRowElement, self).__init__(page_id, row_id, **l_kwargs)
 
         cls_row_elem, cls_row_idx, cls_row_data = c_kwargs.get('class_row_elems')
@@ -424,20 +435,7 @@ class WidgetRowElement(WidgetRowElementBase):
                 self.add_children_layout([self.CHILD_ELEM_DATA, name], w_field)
 
     def do_fresh(self, **kwargs):
-        #page_id = kwargs.get('page_id')
-        #row_id = kwargs.get('row_id')
-        #v_kwargs = kwargs.get('view_kwargs')
-        #v_kwargs = view_kwargs
-        #row_elem = v_kwargs.get('row_elem')
         row_elem = kwargs.get('row_elem')
-
-        # if row_mm.idx_elems:
-        #     layout = self.get_layout(self.CHILD_ELEM_INDEX)
-        #     if layout:
-        #         for j, elem in enumerate(row_mm.idx_elems):
-        #             if elem:
-        #                 layout.do_refresh(col_idx=j)
-
         for j, (name, field) in enumerate(row_elem):
             layout = self.get_children_layout([self.CHILD_ELEM_DATA, name])
             if layout:
@@ -492,24 +490,12 @@ class WidgetRecycleDataView(RecycleDataViewBehavior, LayerBoxLayout):
     def refresh_view_layout(self, rv, index, layout, viewport):
         return super(WidgetRecycleDataView, self).refresh_view_layout(rv, index, layout, viewport)
 
-    # def on_size(self, *args):
-    #     print(self.__class__.__name__, "size", args)
-    #     if self.children:
-    #         print(self.__class__.__name__, "child", self.children[0].size, self.children[0].minimum_size)
-
 class SelectableRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
                                  RecycleBoxLayout):
     ''' Adds selection and focus behaviour to the view. '''
-    def on_size(self, *args):
-        #print(self.__class__.__name__, "on_size", args)
-        pass
-
-    # def do_layout(self, *largs):
-    #     super(SelectableRecycleBoxLayout, self).do_layout(*largs)
-    #     print(self.__class__.__name__, "do_layout", self.size, self.minimum_size)
+    pass
 
 class WidgetPageContentRecycleElement(RecycleView):
-    #minimum_size_a = ListProperty([0, 0])
 
     def __init__(self, **kwargs):
         super(WidgetPageContentRecycleElement, self).__init__(**kwargs)
@@ -527,19 +513,6 @@ class WidgetPageContentRecycleElement(RecycleView):
             del self.__cache[name]
             return w
 
-    # def update_size(self, inst, size):
-    #     #print(self.__class__.__name__, "update_size", inst, "child:", size, "self", self.size)
-    #     self.minimum_size_a = size
-    #     w, h = size
-    #     if self.height > h:
-    #         self.height = h
-    #     if self.width > w:
-    #         self.width = w
-
-    # def add_widget(self, widget, index=0):
-    #     widget.bind(size=self.update_size)
-    #     super().add_widget(widget, index)
-
 class WidgetPageContentBaseElement(WidgetPageContentRecycleElement):
     def __init__(self, id, row_elems, cls_kwargs, **layout_kwargs):
         super(WidgetPageContentBaseElement, self).__init__()
@@ -552,7 +525,6 @@ class WidgetPageContentBaseElement(WidgetPageContentRecycleElement):
                                 'cls_kwargs':cls_kwargs,
                                 'layout_kwargs':layout_kwargs}}
             #print(self.__class__.__name__, row_kwargs)
-            #row_kwargs=cls_row_elems[0](page_id, i, row_elem, cls_kwargs, layout_kwargs)
             data.append(row_kwargs)
 
         setattr(self, 'data', data)
