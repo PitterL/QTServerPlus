@@ -759,7 +759,7 @@ class DebugView(FloatLayout):
         self.append_msg_log(value)
 
     def on_activated(self, inst, status):
-        print(self.__class__.__name__, inst, status)
+        #print(self.__class__.__name__, inst, status)
         if self._root:
             if status:
                 self._root.add_widget(self)
@@ -768,11 +768,11 @@ class DebugView(FloatLayout):
 
     def on_keyboard_down(self, keyboard, keycode, text, modifiers):
         scancode= keycode[0]
-        print('The key', scancode, 'have been pressed')
-        print(' - text is %r' % text)
-        print(' - modifiers are %r' % modifiers)
+        # print('The key', scancode, 'have been pressed')
+        # print(' - text is %r' % text)
+        # print(' - modifiers are %r' % modifiers)
         if scancode == 100 and modifiers == ['ctrl']:   #ctrl + d
-            print(self.__class__.__name__, self.activated)
+            # print(self.__class__.__name__, self.activated)
             self.activated = not self.activated
             return True
         elif scancode == 27:
@@ -784,7 +784,7 @@ class DebugView(FloatLayout):
                 pass
 
     def keyboard_shortcut1(self, win, scancode, *largs):
-        print(self.__class__.__name__, win, scancode, largs)
+        #print(self.__class__.__name__, win, scancode, largs)
         modifiers = largs[-1]
         if scancode == 100 and modifiers == ['ctrl']:
             print(self.__class__.__name__, self.activated)
@@ -818,9 +818,9 @@ class DebugView(FloatLayout):
         #self._keyboard = None
 
     def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
-        print('The key', keycode, 'have been pressed')
-        print(' - text is %r' % text)
-        print(' - modifiers are %r' % modifiers)
+        # print('The key', keycode, 'have been pressed')
+        # print(' - text is %r' % text)
+        # print(' - modifiers are %r' % modifiers)
         # Keycode is composed of an integer + a string
         # If we hit escape, release the keyboard
         if keycode[1] == 'escape':

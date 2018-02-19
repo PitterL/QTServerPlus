@@ -188,6 +188,13 @@ class MemMapStructure(object):
             result.append(str(page))
         return '\n'.join(result)
 
+    def __iter__(self):
+        return self.__pages
+
+    def __getitem__(self, key):
+        if key in self.__pages.keys():
+            return self.__pages[key]
+
     def create_page(self, page_id, offset, length):
         if page_id in self.__pages.keys():
             del self.__pages[page_id]

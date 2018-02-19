@@ -4,6 +4,12 @@
     halign: 'center'
     valign: 'middle'
     canvas.before:
+        BorderImage:
+            # BorderImage behaves like the CSS BorderImage
+            border: 1, 1, 1, 1
+            source: 'image/background_border1.png'
+            pos: self.pos
+            size: self.size
         Color:
             rgba: self.border_color
         Rectangle:
@@ -33,26 +39,31 @@
 <WidgetFieldInputValue>
     size_hint_y: None
     height: DEFAULT_LABLE_SIZE
+    font_name: "font/ARIALN.ttf"
+    font_size: '15sp'
+    bold: False
+    foreground_color: (0, 0, 0, 1)
+    background_color: (1, 1, 1, 1)
+    cursor_color: (0, 0, 0, 1)
+    cursor_blink: True
+    border: (1, 1, 1, 1)
+    background_normal: "image/background_border.png"
+    background_active: "image/background_active.png"
     multiline: False
     write_tab: False
-    size_hint: (1, 1)
-    #background_color: (1, 1, 1, 1)
-    color_data_valid: (1, 1, 1, 1)
-    color_data_invalid: (1, 0.6, 0.6, 1)
-    cursor_color: (0, 0, 0, 1)
-    pos_hint: {'center_x': 0.5}
-    border: (0, 0 , 0, 0)
+    #use_handles: False
 
 <WidgetFieldLabelName>
     font_name: "font/ARIALNB.ttf"
 
 <WidgetFieldIndexName>
     height: DEFAULT_LABLE_SIZE * 2
-    font_size: 12
+    font_name: "arial.ttf"
+    font_size: '12sp'
     shorten: False
     shorten_from: 'right'
+    color: (0, 0.65, 1, 1) if self.hightlight else (0, 0, 0, 1)
     text_size: self.width, None
-    #bold: True
 
 <WidgetFieldTitleName>
     font_name: "font/arialbd.ttf"
@@ -62,7 +73,7 @@
     outline_color: 1, 1, 1, 0.2
     background_color: 0, 0, 0, 1
     border_color: 1, 1, 1, 1
-    #border: (0.5, 0.5, 0.5, 0.5)
+    border: (0.5, 0.5, 0.5, 0.5)
 
 <LayerBoxLayout>
     size_hint_y: None

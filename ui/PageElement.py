@@ -50,8 +50,7 @@ class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
                 'class_idx_field': (WidgetFieldIndexElement, None, WidgetT1FieldLabelValue),
                 'class_data_field': (WidgetFieldElement, None, WidgetT1FieldLabelValue)}
         },
-
-        'default': {
+        Page.ID_INFORMATION: {
             'title': {
                 'class_content': WidgetPageContentTitleElement,
                 'class_row_elems': (WidgetRowTitleElement, WidgetRowIndexElement, WidgetRowDataElement),
@@ -62,6 +61,18 @@ class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
                 'class_row_elems': (WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement),
                 'class_idx_field': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
                 'class_data_field': (WidgetFieldElement, WidgetFieldLabelName, WidgetFieldLabelValue)}
+        },
+        'default': {
+            'title': {
+                'class_content': WidgetPageContentTitleElement,
+                'class_row_elems': (WidgetRowTitleElement, WidgetRowIndexElement, WidgetRowDataElement),
+                'class_idx_field': (WidgetFieldIndexElement, WidgetFieldTitleName, None),
+                'class_data_field': (WidgetFieldElement, WidgetFieldTitleName, None)},
+            'data': {
+                'class_content': WidgetPageContentDataElement,
+                'class_row_elems': (WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement),
+                'class_idx_field': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
+                'class_data_field': (WidgetFieldElement, WidgetFieldLabelName, WidgetFieldInputValue)}
         }
     }
 
@@ -76,6 +87,7 @@ class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
 
     def __init__(self, page_mm):
         page_id = page_mm.id()
+        print(self.__class__.__name__, "init_page", page_id)
         parent_inst = page_mm.parent_inst()
         tab_name = self.to_tab_name(page_id, parent_inst)
         TabbedPanelItem.__init__(self, text=tab_name)
@@ -98,10 +110,10 @@ class WidgetPageMultiInstElement(TabbedPanelItem):
 
     selected = BooleanProperty(False)
 
-    def __init__(self, major, parent_insts, **kwargs):
-        self.__major = major
-        self.__parent_insts = parent_insts
-        self.__elems_tab = {}
+    def __init__(self, major, insts, **kwargs):
+        self.major = major
+        self.insts = insts
+        self.__pages_tab = {}
 
         super(WidgetPageMultiInstElement, self).__init__(text=str(major), **kwargs)
         self._content = self.ids['content']
@@ -109,13 +121,10 @@ class WidgetPageMultiInstElement(TabbedPanelItem):
         #print(self.__class__.__name__, "init", self)
 
     def __str__(self):
-        return super(WidgetPageMultiInstElement, self).__str__() + "{} {} {}".format(self.id(), self.parent_insts(), self.__elems_tab.keys())
+        return super(WidgetPageMultiInstElement, self).__str__() + "{} {} {}".format(self.major, self.insts, self.__pages_tab.keys())
 
     def id(self):
-        return self.__major
-
-    def parent_insts(self):
-        return self.__parent_insts
+        return self.major
 
     # def selected_id(self):
     #     tab = self._content.get_current_tab()
@@ -132,34 +141,36 @@ class WidgetPageMultiInstElement(TabbedPanelItem):
         #print(self.__class__.__name__, "state", value)
         if value == 'down':
             self.selected = True
-            self.set_default_tab()
+            self.switch_tab()
         else:
             self.selected = False
 
-    def set_default_tab(self):
+    def switch_tab(self):
         tab = self._content.get_current_tab()
         if isinstance(tab, TabbedPanelHeader):
-            page_id = (self.id(), 0)
+            page_id = (self.major, 0)
             print(self.__class__.__name__, "on_page_selected", "switch to default page ", page_id)
-            self._content.switch_to(self.get_element(page_id))
-            tab = self._content.get_current_tab()
-            tab.dispatch('on_press')
+            w = self.get_page(page_id)
+            if w:
+                self._content.switch_to(w)
+                tab = self._content.get_current_tab()
+                tab.dispatch('on_press')
 
-    def get_element(self, page_id):
-        return self.__elems_tab.get(page_id, None)
+    def get_page(self, page_id):
+        return self.__pages_tab.get(page_id, None)
 
-    def add_element(self, page_id, w_page):
-        self.__elems_tab[page_id] = w_page
+    def add_page(self, page_id, w_page):
+        self.__pages_tab[page_id] = w_page
         self._content.add_widget(w_page)
 
-    def remove_element(self, page_id):
+    def remove_page(self, page_id):
         widget = self.get_element(page_id)
         if widget:
             widget.clear_widgets()
-            del self.__elems_tab[page_id]
+            del self.__pages_tab[page_id]
 
-    def clear_elements(self):
-        self.__elems_tab.clear()
+    def clear_pages(self):
+        self.__pages_tab.clear()
         super(WidgetPageMultiInstElement, self).clear_widgets()
 
     def do_fresh(self, page_mm):
@@ -179,12 +190,12 @@ class PageElementRoot(TabbedPanel):
         else:
             major = elem_id
 
-        widget = self.__elems_tab.get(major, None)
-        if widget:
-            if widget.id() == elem_id:
-                return widget
-            elif hasattr(widget, 'get_element'):
-                return widget.get_element(elem_id)
+        w = self.__elems_tab.get(major)
+        if w:
+            if w.id() == elem_id:
+                return w
+            else:
+                return w.get_page(elem_id)
 
     def add_element(self, major_id, w_pages):
         self.__elems_tab[major_id] = w_pages
@@ -192,19 +203,18 @@ class PageElementRoot(TabbedPanel):
 
     def create_page_element(self, page_mm):
         parent_inst = page_mm.parent_inst()
-        page_id = major, inst = page_mm.id()
+        major, _ = page_id = page_mm.id()
+        print(self.__class__.__name__, "create page element", page_id, parent_inst)
         if parent_inst > 1:
             parent_widget = self.get_element(major)
             if not parent_widget:
                 parent_widget = WidgetPageMultiInstElement(major, parent_inst)
                 self.add_element(major, parent_widget)
-        else:
-            parent_widget = self
-
-        widget = parent_widget.get_element(page_id)
-        if not widget:
             widget = WidgetPageElement(page_mm)
-            parent_widget.add_element(page_id, widget)
+            parent_widget.add_page(page_id, widget)
+        else:
+            widget = WidgetPageElement(page_mm)
+            self.add_element(major, widget)
 
         return widget
 
@@ -218,17 +228,16 @@ class PageElementRoot(TabbedPanel):
         self.__elems_tab.clear()
         super(PageElementRoot, self).clear_widgets(**kwargs)
 
-    def set_default_element(self, element_id):
-        major, inst = element_id
-        widget = self.__elems_tab.get(major, None)
-        self.switch_to(widget)
-        if widget:
-            tab = self.get_current_tab()
-            #print(self.__class__.__name__, "set_default_element", tab)
-            if isinstance(tab, TabbedPanelHeader):
-                self.switch_to(widget)
-                tab = self.get_current_tab()
-                tab.dispatch('on_press')
+    def switch_to_page(self, elem_id):
+        w = self.get_element(elem_id)
+        if w:
+            self.switch_to(w)
+            # tab = self.get_current_tab()
+            # #print(self.__class__.__name__, "set_default_element", tab)
+            # if isinstance(tab, TabbedPanelHeader):
+            #     self.switch_to(widget)
+            #     tab = self.get_current_tab()
+            #     tab.dispatch('on_press')
 
 if __name__ == '__main__':
 

@@ -16,6 +16,7 @@ class RowElement(object):
             self.start = start
             self.width = width
             self.value = 0
+            self.max_value = (1 << width) - 1
 
         def __str__(self):
             return "{}({s}, {w}, {v})".format(self.__class__.__name__, s=self.start, w=self.width, v=hex(self.value))

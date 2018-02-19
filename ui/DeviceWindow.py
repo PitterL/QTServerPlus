@@ -81,8 +81,8 @@ class DeviceWindow(BoxLayout):
         if page_id == Page.ID_INFORMATION:
             self.chip = ChipMemoryMap.get_chip_mmap(page_cache.buf())
 
-    def get_element(self, page_id):
-        return self._center.get_element(page_id)
+    def get_element(self, elem_id):
+        return self._center.get_element(elem_id)
 
     def create_page_element(self, page_id):
         if not self.chip:
@@ -114,15 +114,15 @@ class DeviceWindow(BoxLayout):
             return
 
         self.chip.create_chip_mmap_pages()
-        all_page_mmaps = self.chip.get_mem_map_tab()
-        for mmap in sorted(all_page_mmaps.values(), key=sort_key):
+        page_mmaps = self.chip.get_mem_map_tab()
+        for mmap in sorted(page_mmaps.values(), key=sort_key):
             page_id = mmap.id()
             widget = self.get_element(page_id)
             if not widget:
-                widget = self.create_page_element(page_id)
+                self.create_page_element(page_id)
                 #print(self.__class__.__name__, "create_page_element", widget)
 
-        self._center.set_default_element(Page.ID_INFORMATION)
+        self._center.switch_to_page(Page.ID_INFORMATION)
 
     def distory_page_element(self):
         self.clear_elements()
@@ -132,16 +132,19 @@ class DeviceWindow(BoxLayout):
         if not self.chip and page_id == Page.ID_INFORMATION:
             self.create_chip(page_cache)
 
-        widget = self._center.get_element(page_id)
-        if not widget:
-            widget = self.create_page_element(page_id)
+        page_mm = self.chip.get_mem_map_tab(page_id)
+        if page_mm:
+            page_mm.set_values(page_cache.buf())
+            w = self.get_element(page_id)
+            if w:
+                w.do_fresh(page_mm)
 
-        if widget:
+        #widget = self.get_element(page_id)
+        # if not widget:
+        #     widget = self.create_page_element(page_id)
+
+        #if widget:
             #print(self.__class__.__name__, "update", widget, page_cache.buf())
-            page_mm = self.chip.get_mem_map_tab(page_id)
-            if page_mm:
-                page_mm.set_values(page_cache.buf())
-                widget.do_fresh(page_mm)
 
     def on_page_selected(self, instance):
         print(self.__class__.__name__, "on_page_selected", instance)

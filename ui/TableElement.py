@@ -5,7 +5,7 @@ from kivy.uix.label import Label
 # from kivy.uix.button import Button
 #from kivy.uix.behaviors import FocusBehavior
 from kivy.graphics import Color, Rectangle
-# from kivy.uix.textinput import TextInput
+from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
 #from kivy.uix.scrollview import ScrollView
 
@@ -13,15 +13,17 @@ from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleview.views import RecycleDataAdapter
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.uix.recycleboxlayout import RecycleBoxLayout
-from kivy.properties import BooleanProperty, StringProperty, ListProperty
+from kivy.properties import NumericProperty,  BooleanProperty, StringProperty, ListProperty
 from kivy.uix.behaviors import FocusBehavior
 from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 from kivy.animation import Animation
-from kivy.uix.textinput import TextInput
+#from kivy.uix.textinput import TextInput
 from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem, TabbedPanelHeader
 from server.devinfo import Page
+#from ui.uix.textinput import TextInput
 
 from collections import OrderedDict
+import re
 
 class ElemError(Exception):
     "Message error exception class type"
@@ -98,7 +100,7 @@ class WidgetFieldLabelBase(Label):
     """Border color, in the format (r, g, b, a)."""
     
     (TYPE_NAME, TYPE_VALUE) = ('NAME', 'VALUE')
-    def __init__(self, row, col, v, t, **kwargs):
+    def __init__(self, row, col, v, max_v, t, **kwargs):
         self.row = row
         self.col = col
         self._val = v
@@ -146,34 +148,66 @@ class WidgetFieldLabelBase(Label):
         self.fresh()
 
 class WidgetFieldIndexName(WidgetFieldLabelBase):
+    hightlight = BooleanProperty(False)
+
     def __init__(self, row, col, v):
-        super(WidgetFieldIndexName, self).__init__(row, col, v, self.TYPE_NAME)
+        super(WidgetFieldIndexName, self).__init__(row, col, v, None, self.TYPE_NAME)
         self._type = self.TYPE_NAME
+        self.adjust_font_color()
+
+    def adjust_font_color(self):
+        if self.col == 1:
+            self.hightlight = True
 
 class WidgetFieldLabelName(WidgetFieldLabelBase):
     def __init__(self, row, col, v, **kwargs):
-        super(WidgetFieldLabelName, self).__init__(row, col, v, self.TYPE_NAME, **kwargs)
+        super(WidgetFieldLabelName, self).__init__(row, col, v, None, self.TYPE_NAME, **kwargs)
         self._type = self.TYPE_NAME
 
 class WidgetFieldTitleName(WidgetFieldLabelName):
     pass
 
 class WidgetFieldLabelValue(WidgetFieldLabelBase):
-    def __init__(self, row, col, v):
-        super(WidgetFieldLabelValue, self).__init__(row, col, v, self.TYPE_VALUE)
+    def __init__(self, row, col, v, max_v):
+        super(WidgetFieldLabelValue, self).__init__(row, col, v, max_v, self.TYPE_VALUE)
         self._type = self.TYPE_VALUE
 
-from ui.DebugView import ElemValVar2, ElemValVarBase
-
-class WidgetFieldInputValue(ElemValVar2):
+class WidgetFieldInputValue(TextInput):
     (TYPE_NAME, TYPE_VALUE) = ('NAME', 'VALUE')
+    PAT_INPUT_CHAR = re.compile("[\da-fA-FxX]")
+    #value = NumericProperty(0)
+    error = StringProperty('')
 
-    def __init__(self, row, col, v):
+    def __init__(self, row, col, v, max_v=0xff):
         super(WidgetFieldInputValue, self).__init__()
         self.row = row
         self.col = col
-        self._val = v
-        self.set_value(self._val)
+        self.max_value = max_v
+        self.set_value(v)
+
+        # self._label_cached = WidgetFieldLabelValue(self.row, self.col, self._val)
+        # d = Label._font_properties
+        # self._line_options = dict(list(zip(d, [getattr(self._label_cached, x) for x in d])))
+        #self._line_options = []
+
+    def _get_line_options1(self):
+        # Get or create line options, to be used for Label creation
+        if self._line_options is None:
+            self._line_options = kw = {
+                'font_name': "ARIALN.ttf",
+                'font_size': self.font_size,
+                'font_name': self.font_name,
+                'anchor_x': 'left',
+                'anchor_y': 'top',
+                'padding_x': 0,
+                'padding_y': 0,
+                'padding': (0, 0),
+                'halign': 'center',
+                'valign': 'justify',
+                'color': (0,0,0,1),
+                'size': self.size}
+            self._label_cached = self._label_cls()
+        return self._line_options
 
     def type(self):
         return self.TYPE_VALUE
@@ -184,6 +218,64 @@ class WidgetFieldInputValue(ElemValVar2):
     def is_type_value(self):
         return True
 
+    def set_value(self, val):
+        if val <= self.max_value:
+            self.value = val
+            self.text = str(val)
+        else:
+            self.error = 'v'
+
+    def on_error(self, inst, type):
+        pass
+
+    def _get_padding_left(self, text):
+        width = self.width
+        text_width = self._get_text_width(text, self.tab_width, None)
+        if width >= text_width:
+            left = (width - text_width) / 2
+        else:
+            left = 0
+
+        #print(self.__class__.__name__, width, text_width, left)
+        return left
+
+    def on_size(self, *args):
+        self.padding[0] = self._get_padding_left(self.text)
+
+    def insert_text(self, substring, from_undo=False):
+        if self.PAT_INPUT_CHAR.match(substring):
+            return super().insert_text(substring, from_undo=from_undo)
+
+        print(self.__class__.__name__, "Invalid char input:", substring)
+
+    def do_backspace(self, from_undo=False, mode='bkspc'):
+        return super().do_backspace(from_undo, mode)
+
+    def on_focus(self, instance, value):
+        if not value:
+            self.on_text_validate()
+
+    def _convert_text(self, text):
+        t = text.strip().lower()
+        if t.startswith("0x"):
+            base = 16
+        else:
+            base = 10
+
+        try:
+            value = int(t, base)
+            if value <= self.max_value:
+                return value
+        except:
+            print("Invalid input value:", text)
+
+    def on_text_validate(self):
+        val = self._convert_text(self.text)
+        if isinstance(val, int):
+            self.set_value(val)
+
+    def on_text(self, inst, text):
+        self.padding[0] = self._get_padding_left(text)
 
 class LayerBoxLayout(BoxLayout):
     def __init__(self, *args, **kwargs):
@@ -271,8 +363,9 @@ class WidgetFieldElement(LayerBoxLayout):
         #print(self.__class__.__name__, kwargs)
         self.row =  kwargs.get('row_idx')
         self.col = kwargs.get('col_idx')
-        name = kwargs.get('name', None)
-        value = kwargs.get('value', None)
+        name = kwargs.get('name')
+        value = kwargs.get('value')
+        max_value = kwargs.get('max_value')
         cls_field_name = kwargs.get('class_field_name')
         cls_field_value = kwargs.get('class_field_value')
         layout_kwargs = kwargs.get('layout_kwargs', dict())
@@ -283,7 +376,7 @@ class WidgetFieldElement(LayerBoxLayout):
             self.add_layout(w.type(), w)
 
         if cls_field_value:
-            w = cls_field_value(self.row, self.col, value)
+            w = cls_field_value(self.row, self.col, value, max_value)
             self.add_layout(w.type(), w)
 
     def __str__(self):
@@ -317,7 +410,6 @@ class WidgetFieldIndexElement(WidgetFieldElement):
     def adjust_size_hint(self):
         if self.col == 0:
             self.size_hint_x = self.idx_size_hint
-    #
 
 class WidgetRowIndexElement(LayerBoxLayout):
     pass
@@ -429,7 +521,7 @@ class WidgetRowElement(WidgetRowElementBase):
             for j, (name, field) in enumerate(row_elem):   #row_elem is RowElement, iter() is {name: BitField}
                 percent = field.width / line_space
                 layout_kwargs = {'size_hint_x': percent}
-                kwargs = dict(col_idx=j, name=name, value=field.value,
+                kwargs = dict(col_idx=j, name=name, value=field.value, max_value=field.max_value,
                               layout_kwargs=layout_kwargs, cls_kwargs=cls_data_field)
                 w_field = self.create_field_element(**kwargs)
                 self.add_children_layout([self.CHILD_ELEM_DATA, name], w_field)

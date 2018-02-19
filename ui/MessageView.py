@@ -161,9 +161,9 @@ class MessageView(FloatLayout):
 
     def on_keyboard_down(self, keyboard, keycode, text, modifiers):
         scancode= keycode[0]
-        print('The key', scancode, 'have been pressed')
-        print(' - text is %r' % text)
-        print(' - modifiers are %r' % modifiers)
+        # print('The key', scancode, 'have been pressed')
+        # print(' - text is %r' % text)
+        # print(' - modifiers are %r' % modifiers)
         if scancode == 109 and modifiers == ['ctrl']:   #ctrl + m
             print(self.__class__.__name__, self.activated)
             self.activated = not self.activated
