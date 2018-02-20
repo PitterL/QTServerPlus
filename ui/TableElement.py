@@ -324,7 +324,7 @@ class ActionEvent(object):
 Factory.register('ActionEvent', cls=ActionEvent)
 
 class LayerBehavior(object):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         self.__layers = {}
 
     def __iter__(self):
@@ -333,38 +333,33 @@ class LayerBehavior(object):
     def __len__(self):
         return len(self.__layers)
 
+    def get_layer_names(self):
+        return tuple(self.__layers.keys())
+
+    def get_layers(self):
+        return tuple(self.__layers.values())
+
     def get_layer(self, name):
-        return self.__layers.get(name, None)
+        return self.__layers.get(name)
 
     def add_layer(self, name, widget):
         self.__layers[name] = widget
 
     def remove_layer(self, name):
         if name in self.__layers.keys():
+            w = self.__layers[name]
             del self.__layers[name]
+            return w
 
-class LayerBoxLayout(ActionEvent, BoxLayout):
-    def __init__(self, *args, **kwargs):
-        super(LayerBoxLayout, self).__init__(*args, **kwargs)
-        self.__layout = {}
+Factory.register('LayerBehavior', cls=LayerBehavior)
+
+class LayerBoxLayout(LayerBehavior, ActionEvent, BoxLayout):
+    def __init__(self, **kwargs):
+        #super(LayerBoxLayout, self).__init__(*args, **kwargs)  #why couldn't use this?
+        LayerBehavior.__init__(self)
+        ActionEvent.__init__(self)
+        BoxLayout.__init__(self, **kwargs)
         self.prop_set_default_minimum_height = True
-
-    # def __str__(self):
-    #     text = self.__class__.__name__
-    #     return text
-
-    def __iter__(self):
-        return iter(self.__layout)
-
-    def __len__(self):
-        return len(self.__layout)
-
-    # def on_size(self, *args):
-    #     print(self.__class__.__name__, "on_size", args)
-
-    # def do_layout(self, *largs):
-    #     print(self.__class__.__name__, self, self.size, self.minimum_size)
-    #     super(LayerBoxLayout, self).do_layout(*largs)
 
     def set_default_minimum_height(self):
         shw, shh = self.size_hint
@@ -376,11 +371,11 @@ class LayerBoxLayout(ActionEvent, BoxLayout):
                     height = sum([child.height for child in self.children])
                 self.minimum_height = height
 
-    def get_layout(self, name):
-        return self.__layout.get(name, None)
+    def get_layer(self, name):
+        return super(LayerBoxLayout, self).get_layer(name)
 
-    def add_layout(self, name, widget):
-        self.__layout[name] = widget
+    def add_layer(self, name, widget):
+        super(LayerBoxLayout, self).add_layer(name, widget)
         self.action_bind(widget)
         self.add_widget(widget)
 
@@ -389,41 +384,41 @@ class LayerBoxLayout(ActionEvent, BoxLayout):
         if self.prop_set_default_minimum_height:
             self.set_default_minimum_height()
 
-    def remove_layout(self, name):
-        if name in self.__layout.keys():
-            w = self.__layout[name]
+    def remove_layer(self, name):
+        if name in super(LayerBoxLayout, self).get_layer_names():
+            w = super(LayerBoxLayout, self).get_layer(name)
             self.action_unbind(w)
             self.remove_widget(w)
-            del self.__layout[name]
+            super(LayerBoxLayout, self).remove_layer(name)
 
-    def detach_layout(self):
-        for n in list(self.__layout.keys()):
-            self.remove_layout(n)
+    def detach_layer(self):
+        for n in super(LayerBoxLayout, self).get_layer_names():
+            self.remove_layer(n)
 
-    def clear_layout(self):
-        for layout in self.__layout.values():
+    def clear_layer(self):
+        for layout in super(LayerBoxLayout, self).get_layers():
             if isinstance(layout, LayerBoxLayout):
-                layout.clear_layout()
+                layout.clear_layer()
             else:
-                self.remove_layout(layout)
+                self.remove_layer(layout)
 
-    def add_children_layout(self, child_name_nested, widget):
+    def add_child_layer(self, child_name_nested, widget):
         assert isinstance(child_name_nested, (tuple, list))
         if len(child_name_nested) > 1:
-            layout = self.get_layout(child_name_nested[0])
+            layout = self.get_layer(child_name_nested[0])
             assert isinstance(layout, LayerBoxLayout)
-            layout.add_children_layout(child_name_nested[1:], widget)
+            layout.add_child_layer(child_name_nested[1:], widget)
         else:
-            self.add_layout(child_name_nested[0], widget)
+            self.add_layer(child_name_nested[0], widget)
 
-    def get_children_layout(self, child_name_nested):
+    def get_child_layer(self, child_name_nested):
         assert isinstance(child_name_nested, (tuple, list))
         if len(child_name_nested) > 1:
-            layout = self.get_layout(child_name_nested[0])
+            layout = self.get_layer(child_name_nested[0])
             assert isinstance(layout, LayerBoxLayout)
-            return layout.get_children_layout(child_name_nested[1:])
+            return layout.get_child_layer(child_name_nested[1:])
         else:
-            return self.get_layout(child_name_nested[0])
+            return self.get_layer(child_name_nested[0])
 
 class WidgetFieldElement(LayerBoxLayout):
     def __init__(self, **kwargs):
@@ -440,11 +435,11 @@ class WidgetFieldElement(LayerBoxLayout):
 
         if cls_field_name:
             w = cls_field_name(self.row, self.col, name)
-            self.add_layout(w.type(), w)
+            self.add_layer(w.type(), w)
 
         if cls_field_value:
             w = cls_field_value(self.row, self.col, value, max_value)
-            self.add_layout(w.type(), w)
+            self.add_layer(w.type(), w)
 
     def __str__(self):
         text = self.__class__.__name__ + "[row {}] [col {}]".format(self.row, self.col)
@@ -529,9 +524,9 @@ class WidgetRowElementBase(RecycleDataViewBehavior, LayerBoxLayout):
         kwargs = data
         w_row_kwargs = kwargs.get('w_row_kwargs')
         row_mm = w_row_kwargs.get('row_mm')
-        layout = self.get_layout(self.CHILD_ELEM_DATA)
+        layout = self.get_layer(self.CHILD_ELEM_DATA)
         for child in layout.children:
-            child_v = child.get_layout(WidgetFieldElement.VALUE)
+            child_v = child.get_layoer(WidgetFieldElement.VALUE)
             value = row_mm.get_field_by_idx(child_v.col_idx())
             child.set_value(value)
 
@@ -574,16 +569,16 @@ class WidgetRowElement(WidgetRowElementBase):
         # idx content
         if cls_row_idx:
             if row_elem.idx_desc:
-                self.add_layout(self.CHILD_ELEM_INDEX, cls_row_idx())
+                self.add_layer(self.CHILD_ELEM_INDEX, cls_row_idx())
                 for j, desc in enumerate(row_elem.idx_desc):
                     if desc:
                         name, _= desc
                         w_field = self.create_field_element(col_idx=j, name=name, cls_kwargs=cls_idx_field)
-                        self.add_children_layout([self.CHILD_ELEM_INDEX, name], w_field)
+                        self.add_child_layer([self.CHILD_ELEM_INDEX, name], w_field)
 
         # data content
         if cls_row_data:
-            self.add_layout(self.CHILD_ELEM_DATA, cls_row_data())
+            self.add_layer(self.CHILD_ELEM_DATA, cls_row_data())
             line_space = sum(map(lambda v: v.width, row_elem.field_values()))
             for j, (name, field) in enumerate(row_elem):   #row_elem is RowElement, iter() is {name: BitField}
                 percent = field.width / line_space
@@ -591,12 +586,12 @@ class WidgetRowElement(WidgetRowElementBase):
                 kwargs = dict(col_idx=j, name=name, value=field.value, max_value=field.max_value,
                               layout_kwargs=layout_kwargs, cls_kwargs=cls_data_field)
                 w_field = self.create_field_element(**kwargs)
-                self.add_children_layout([self.CHILD_ELEM_DATA, name], w_field)
+                self.add_child_layer([self.CHILD_ELEM_DATA, name], w_field)
 
     def do_fresh(self, **kwargs):
         row_elem = kwargs.get('row_elem')
         for j, (name, field) in enumerate(row_elem):
-            layout = self.get_children_layout([self.CHILD_ELEM_DATA, name])
+            layout = self.get_child_layer([self.CHILD_ELEM_DATA, name])
             if layout:
                 layout.set_value(field.value)
 
@@ -627,21 +622,21 @@ class WidgetRecycleDataView(RecycleDataViewBehavior, LayerBoxLayout):
         cls_row_elem, _, _ = c_kwargs.get('class_row_elems')
 
         wid = (page_id, row_id)
-        w = self.get_layout(wid)
+        w = self.get_layer(wid)
         if w:
             w.do_fresh(**v_kwargs)
         else:
-            self.detach_layout()
+            self.detach_layer()
             w = rv.get_view(wid)
             if w:
                 w.do_fresh(**v_kwargs)
                 if w.parent:
-                    w.parent.remove_layout(wid)
+                    w.parent.remove_layer(wid)
             else:
                 w = cls_row_elem(**kwargs)
                 rv.save(wid, w)
 
-            self.add_layout(wid, w)
+            self.add_layer(wid, w)
 
         self.index = index
         return super(WidgetRecycleDataView, self).refresh_view_attrs(rv, index, data)
@@ -722,25 +717,27 @@ class WidgetPageContentTitleElement(LayerBoxLayout):
         for i, row_elem in enumerate(row_elems):
             view_kwargs = {'page_id': id, 'row_id': i, 'row_elem': row_elem}
             widget = cls_row_elem(view_kwargs=view_kwargs, cls_kwargs=cls_kwargs, layout_kwargs=layout_kwargs)
-            self.add_layout(i, widget)
+            self.add_layer(i, widget)
 
 class WidgetPageContentDataElement(WidgetPageContentBaseElement):
     pass
 
-class WidgetPageBehavior(object):
+class WidgetPageBehavior(LayerBehavior, ActionEvent):
     (PAGE_CHILD_ELEM_TITLE, PAGE_CHILD_ELEM_CONTENT) = ('Title', 'Content')
     (W_TITLE, W_CONTENT) = range(2)
 
     selected = BooleanProperty(False)
 
     def __init__(self, parent_widget, id, cls_kwargs):
+        super(WidgetPageBehavior, self).__init__()
         self._parent = parent_widget
         self._id = id
         self._c_kwargs = cls_kwargs
-        self.__layout = {}
+        #self.__layout = {}
 
     def inited(self):
-        return self.PAGE_CHILD_ELEM_CONTENT in self.__layout.keys()
+        #return self.PAGE_CHILD_ELEM_CONTENT in self.__layout.keys()
+        return self.get_layer(self.PAGE_CHILD_ELEM_CONTENT)
 
     def id(self):
         return self._id
@@ -760,15 +757,22 @@ class WidgetPageBehavior(object):
     #     print(self.__class__.__name__, "unselected")
     #     self.selected = False
 
-    def parent_inst(self):
-        return self.__parent_inst
+    # def parent_inst(self):
+    #     return self.__parent_inst
 
-    def add_layout(self, name, layout):
-        self.__layout[name] = layout
-        self._parent.add_widget(layout)
+    def add_layer(self, name, widget):
+        super(WidgetPageBehavior, self).add_layer(name, widget)
+        self.action_bind(widget)
+        self._parent.add_widget(widget)
 
-    def get_layout(self, name):
-        return self.__layout[name]
+    def remove_layer(self, name):
+        w = super(WidgetPageBehavior, self).remove_layer(name)
+        if w:
+            self.action_unbind(w)
+            self._parent.remove_widget(w)
+
+    # def get_layout(self, name):
+    #     return self.__layout[name]
 
     def to_tab_name(self):
         return str(self.id())
@@ -779,13 +783,13 @@ class WidgetPageBehavior(object):
              cls_kwargs = self._c_kwargs['title']
              cls_content = cls_kwargs['class_content']
              widget = cls_content(self.id(), page_mm.title, cls_kwargs)
-             self.add_layout(self.PAGE_CHILD_ELEM_TITLE, widget)
+             self.add_layer(self.PAGE_CHILD_ELEM_TITLE, widget)
 
          # create title layout
          cls_kwargs = self._c_kwargs['data']
          cls_content = cls_kwargs['class_content']
          widget = cls_content(self.id(), page_mm, cls_kwargs)
-         self.add_layout(self.PAGE_CHILD_ELEM_TITLE, widget)
+         self.add_layer(self.PAGE_CHILD_ELEM_TITLE, widget)
 
     def do_fresh(self, page_mm):
 
@@ -795,7 +799,7 @@ class WidgetPageBehavior(object):
 
         if self.inited():
             #FIXME: here row_mm may be same as page_mm.row()
-            layout = self.get_layout(self.PAGE_CHILD_ELEM_CONTENT)
+            layout = self.get_layer(self.PAGE_CHILD_ELEM_CONTENT)
             # for i, data in enumerate(layout.data):
             #     w_row_kwargs = data.get('w_row_kwargs')
             #     if 'row_mm' in w_row_kwargs.keys():

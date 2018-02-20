@@ -50,27 +50,27 @@ class WidgetT1RowElement(WidgetRowElementBase):
         idx_content, data_content = row_data
         # idx content
         if cls_row_idx:
-            self.add_layout(self.CHILD_ELEM_INDEX, cls_row_idx())
+            self.add_layer(self.CHILD_ELEM_INDEX, cls_row_idx())
             for i, (name, value) in enumerate(idx_content.items()):
                 w_field = self.create_field_element(col_idx=i, name=name, value=value, cls_kwargs=cls_idx_field)
-                self.add_children_layout([self.CHILD_ELEM_INDEX, name], w_field)
+                self.add_children_layer([self.CHILD_ELEM_INDEX, name], w_field)
 
         #data content
         if cls_row_data:
-            self.add_layout(self.CHILD_ELEM_DATA, cls_row_data())
+            self.add_layer(self.CHILD_ELEM_DATA, cls_row_data())
             for i, (name, value) in enumerate(data_content.items()):
                 #print(self.__class__.__name__, "create_field_element", name, value)
                 layout_kwargs = {}
                 kwargs = dict(col_idx=i, name=name, value=value,   #set name and value same
                               layout_kwargs=layout_kwargs, cls_kwargs=cls_data_field)
                 w_field = self.create_field_element(**kwargs)
-                self.add_children_layout([self.CHILD_ELEM_DATA, name], w_field)
+                self.add_child_layer([self.CHILD_ELEM_DATA, name], w_field)
 
     def do_fresh(self, **kwargs):
         _, data_content = kwargs.get('row_data')
 
         for name, value in data_content.items():
-            layout = self.get_children_layout([self.CHILD_ELEM_DATA, name])
+            layout = self.get_child_layer([self.CHILD_ELEM_DATA, name])
             if layout:
                 layout.set_value(value)
 
@@ -101,7 +101,7 @@ class WidgetT1PageContentTitleElement(WidgetT1RowElementPacking, LayerBoxLayout)
         row_data = self.build_row_data(None)
         view_kwargs = {'page_id': id, 'row_id': 0, 'row_data': row_data, }
         widget = cls_row_elem(view_kwargs=view_kwargs, cls_kwargs=cls_kwargs, layout_kwargs=layout_kwargs)
-        self.add_layout(-1, widget)
+        self.add_layer(-1, widget)
 
 class WidgetT1PageContentDataElement(WidgetT1RowElementPacking, WidgetPageContentRecycleElement):
     def __init__(self, id, row_elems, cls_kwargs, **layout_kwargs):
