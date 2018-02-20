@@ -286,7 +286,7 @@ if __name__ == '__main__':
 
             chip.create_chip_mmap_pages()
             all_page_mmaps = chip.get_mem_map_tab()
-            for mmap in sorted(all_page_mmaps.values(), key=sort_key):
+            for mmap in sorted(all_page_mmaps.values(), key=sort_key)[4:5]:
                 page_id = mmap.id()
                 widget = root.get_element(page_id)
                 if not widget:

@@ -47,11 +47,14 @@
     cursor_color: (0, 0, 0, 1)
     cursor_blink: True
     border: (1, 1, 1, 1)
-    background_normal: "image/background_border.png"
-    background_active: "image/background_active.png"
+    background_normal: self.pg_normal
+    background_active: self.pg_active
     multiline: False
     write_tab: False
     #use_handles: False
+    pg_error: "image/background_error.png"
+    pg_active: "image/background_active.png"
+    pg_normal: "image/background_border.png"
 
 <WidgetFieldLabelName>
     font_name: "font/ARIALNB.ttf"

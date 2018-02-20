@@ -13,7 +13,7 @@ from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleview.views import RecycleDataAdapter
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.uix.recycleboxlayout import RecycleBoxLayout
-from kivy.properties import NumericProperty,  BooleanProperty, StringProperty, ListProperty
+from kivy.properties import NumericProperty,  BooleanProperty, StringProperty, ListProperty, DictProperty
 from kivy.uix.behaviors import FocusBehavior
 from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 from kivy.animation import Animation
@@ -21,6 +21,7 @@ from kivy.animation import Animation
 from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem, TabbedPanelHeader
 from server.devinfo import Page
 #from ui.uix.textinput import TextInput
+from kivy.factory import Factory
 
 from collections import OrderedDict
 import re
@@ -108,7 +109,7 @@ class WidgetFieldLabelBase(Label):
         super(WidgetFieldLabelBase, self).__init__(text=self.covert_to_text(), **kwargs)
 
     def __str__(self):
-        return "{} [row {}] [col {}] [type {}]: {} ".format(self.__class__.__name__, self.row, self.col, self._type, self._val)
+        return "{} [{}-{}] [type {}]: {} ".format(self.__class__.__name__, self.row, self.col, self._type, self._val)
 
     def __repr__(self):
         return super(WidgetFieldLabelBase, self).__repr__() + self.__str__()
@@ -175,39 +176,46 @@ class WidgetFieldLabelValue(WidgetFieldLabelBase):
 class WidgetFieldInputValue(TextInput):
     (TYPE_NAME, TYPE_VALUE) = ('NAME', 'VALUE')
     PAT_INPUT_CHAR = re.compile("[\da-fA-FxX]")
-    #value = NumericProperty(0)
-    error = StringProperty('')
+
+    action = DictProperty({})
+    # PG_ERROR = StringProperty('')
+    # PG_NORMAL = StringProperty('')
+    # PG_ACTIVE = StringProperty('')
 
     def __init__(self, row, col, v, max_v=0xff):
-        super(WidgetFieldInputValue, self).__init__()
         self.row = row
         self.col = col
+        self.value = v
         self.max_value = max_v
+        super(WidgetFieldInputValue, self).__init__()
+
         self.set_value(v)
 
-        # self._label_cached = WidgetFieldLabelValue(self.row, self.col, self._val)
-        # d = Label._font_properties
-        # self._line_options = dict(list(zip(d, [getattr(self._label_cached, x) for x in d])))
-        #self._line_options = []
+    def __str__(self):
+        text = self.__class__.__name__ + "[{}-{}] {}".format(self.row, self.col, self.value)
+        return text
 
-    def _get_line_options1(self):
-        # Get or create line options, to be used for Label creation
-        if self._line_options is None:
-            self._line_options = kw = {
-                'font_name': "ARIALN.ttf",
-                'font_size': self.font_size,
-                'font_name': self.font_name,
-                'anchor_x': 'left',
-                'anchor_y': 'top',
-                'padding_x': 0,
-                'padding_y': 0,
-                'padding': (0, 0),
-                'halign': 'center',
-                'valign': 'justify',
-                'color': (0,0,0,1),
-                'size': self.size}
-            self._label_cached = self._label_cls()
-        return self._line_options
+    def __repr__(self):
+        return super(WidgetFieldInputValue, self).__repr__() + self.__str__()
+
+    # def _get_line_options1(self):
+    #     # Get or create line options, to be used for Label creation
+    #     if self._line_options is None:
+    #         self._line_options = kw = {
+    #             'font_name': "ARIALN.ttf",
+    #             'font_size': self.font_size,
+    #             'font_name': self.font_name,
+    #             'anchor_x': 'left',
+    #             'anchor_y': 'top',
+    #             'padding_x': 0,
+    #             'padding_y': 0,
+    #             'padding': (0, 0),
+    #             'halign': 'center',
+    #             'valign': 'justify',
+    #             'color': (0,0,0,1),
+    #             'size': self.size}
+    #         self._label_cached = self._label_cls()
+    #     return self._line_options
 
     def type(self):
         return self.TYPE_VALUE
@@ -225,8 +233,14 @@ class WidgetFieldInputValue(TextInput):
         else:
             self.error = 'v'
 
-    def on_error(self, inst, type):
-        pass
+    def set_error(self, code):
+        if code:
+            self.background_normal = self.pg_error
+        else:
+            self.background_normal = self.pg_normal
+
+    def clr_err(self):
+        self.set_error(None)
 
     def _get_padding_left(self, text):
         width = self.width
@@ -239,21 +253,11 @@ class WidgetFieldInputValue(TextInput):
         #print(self.__class__.__name__, width, text_width, left)
         return left
 
-    def on_size(self, *args):
-        self.padding[0] = self._get_padding_left(self.text)
-
     def insert_text(self, substring, from_undo=False):
         if self.PAT_INPUT_CHAR.match(substring):
             return super().insert_text(substring, from_undo=from_undo)
 
         print(self.__class__.__name__, "Invalid char input:", substring)
-
-    def do_backspace(self, from_undo=False, mode='bkspc'):
-        return super().do_backspace(from_undo, mode)
-
-    def on_focus(self, instance, value):
-        if not value:
-            self.on_text_validate()
 
     def _convert_text(self, text):
         t = text.strip().lower()
@@ -269,24 +273,85 @@ class WidgetFieldInputValue(TextInput):
         except:
             print("Invalid input value:", text)
 
-    def on_text_validate(self):
+    def on_enter(self, *args):
+        action = {'row': self.row, 'col': self.col, 'type': self.type(), 'value':self.value}
+        print(self.__class__.__name__, "on_enter", action)
+        self.action = action
+
+    def on_text_validate(self, send=True):
         val = self._convert_text(self.text)
         if isinstance(val, int):
-            self.set_value(val)
+            if val != self.value:
+                self.set_value(val)
+                self.clr_err()
+                if send:
+                    self.on_enter()
+        else:
+            print(self.__class__.__name__, "input error:", self.text)
+            self.set_error('v')
+
+    def on_focus(self, instance, value):
+        if not value:
+            self.on_text_validate(False)
 
     def on_text(self, inst, text):
         self.padding[0] = self._get_padding_left(text)
 
-class LayerBoxLayout(BoxLayout):
+    def on_size(self, *args):
+        self.padding[0] = self._get_padding_left(self.text)
+
+class ActionEvent(object):
+    action = DictProperty({})
+
+    def on_action(self, inst, action):
+        #override this action to process action, of call directly report action to higher level
+        if inst is not self:
+            print(self.__class__.__name__, "on_action", inst, action)
+            self.action = action
+
+    def action_bind(self, widget):
+        action = widget.property('action', True)
+        if action:
+            print(self.__class__.__name__, "bind:", widget, "---", self)
+            widget.bind(action=self.on_action)
+
+    def action_unbind(self, widget):
+        action = widget.property('action', True)
+        if action:
+            print(self.__class__.__name__, "unbind:", widget, "---", self)
+            widget.unbind(action=self.on_action)
+
+Factory.register('ActionEvent', cls=ActionEvent)
+
+class LayerBehavior(object):
+    def __init__(self, *args, **kwargs):
+        self.__layers = {}
+
+    def __iter__(self):
+        return iter(self.__layers)
+
+    def __len__(self):
+        return len(self.__layers)
+
+    def get_layer(self, name):
+        return self.__layers.get(name, None)
+
+    def add_layer(self, name, widget):
+        self.__layers[name] = widget
+
+    def remove_layer(self, name):
+        if name in self.__layers.keys():
+            del self.__layers[name]
+
+class LayerBoxLayout(ActionEvent, BoxLayout):
     def __init__(self, *args, **kwargs):
         super(LayerBoxLayout, self).__init__(*args, **kwargs)
         self.__layout = {}
         self.prop_set_default_minimum_height = True
 
-    def __str__(self):
-        text = self.__class__.__name__
-        text += "[size{}] [minimum_size{}]".format(self.size, self.minimum_size)
-        return text
+    # def __str__(self):
+    #     text = self.__class__.__name__
+    #     return text
 
     def __iter__(self):
         return iter(self.__layout)
@@ -316,6 +381,7 @@ class LayerBoxLayout(BoxLayout):
 
     def add_layout(self, name, widget):
         self.__layout[name] = widget
+        self.action_bind(widget)
         self.add_widget(widget)
 
         # RecycleView has some bug for fresh height = self.minimum_height, we should adjust it may manually
@@ -326,6 +392,7 @@ class LayerBoxLayout(BoxLayout):
     def remove_layout(self, name):
         if name in self.__layout.keys():
             w = self.__layout[name]
+            self.action_unbind(w)
             self.remove_widget(w)
             del self.__layout[name]
 
@@ -337,8 +404,8 @@ class LayerBoxLayout(BoxLayout):
         for layout in self.__layout.values():
             if isinstance(layout, LayerBoxLayout):
                 layout.clear_layout()
-        self.clear_widgets()
-        self.__layout.clear()
+            else:
+                self.remove_layout(layout)
 
     def add_children_layout(self, child_name_nested, widget):
         assert isinstance(child_name_nested, (tuple, list))
@@ -380,10 +447,10 @@ class WidgetFieldElement(LayerBoxLayout):
             self.add_layout(w.type(), w)
 
     def __str__(self):
-        text = self.__class__.__name__
-        if self.children:
-            text += "\n\t"
-            text += "\n\t".join(map(str, self.children))
+        text = self.__class__.__name__ + "[row {}] [col {}]".format(self.row, self.col)
+        # if self.children:
+        #     text += "\n\t"
+        #     text += "\n\t".join(map(str, self.children))
         return text
 
     def __repr__(self):
@@ -432,9 +499,9 @@ class WidgetRowElementBase(RecycleDataViewBehavior, LayerBoxLayout):
     def __str__(self):
         text = self.__class__.__name__
         text += "[page{}] [row {}]".format(self.__page_id, self.__row_idx)
-        if self.children:
-            text += "\n\t"
-            text += "\n\t".join(map(str, self.children))
+        # if self.children:
+        #     text += "\n\t"
+        #     text += "\n\t".join(map(str, self.children))
         return text
 
     def __repr__(self):
@@ -539,9 +606,9 @@ class WidgetRowTitleElement(WidgetRowElement):
 class WidgetRecycleDataView(RecycleDataViewBehavior, LayerBoxLayout):
     def __str__(self):
         text = self.__class__.__name__
-        if self.children:
-            text += "\n\t"
-            text += "\n\t".join(map(str, self.children))
+        # if self.children:
+        #     text += "\n\t"
+        #     text += "\n\t".join(map(str, self.children))
         return text
 
     def __repr__(self):
@@ -583,11 +650,28 @@ class WidgetRecycleDataView(RecycleDataViewBehavior, LayerBoxLayout):
         return super(WidgetRecycleDataView, self).refresh_view_layout(rv, index, layout, viewport)
 
 class SelectableRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
-                                 RecycleBoxLayout):
-    ''' Adds selection and focus behaviour to the view. '''
-    pass
+                                 ActionEvent, RecycleBoxLayout):
 
-class WidgetPageContentRecycleElement(RecycleView):
+    ''' Adds selection and focus behaviour to the view. '''
+
+    def add_widget(self, widget, index=0):
+        self.action_bind(widget)
+        super().add_widget(widget, index)
+
+    def remove_widget(self, widget):
+        self.action_unbind(widget)
+        super().remove_widget(widget)
+
+    def clear_widgets(self, children=None):
+        if not children:
+            children = self.children
+
+        for child in children:
+            self.action_unbind(child)
+
+        super().clear_widgets(children)
+
+class WidgetPageContentRecycleElement(ActionEvent, RecycleView):
 
     def __init__(self, **kwargs):
         super(WidgetPageContentRecycleElement, self).__init__(**kwargs)
@@ -604,6 +688,14 @@ class WidgetPageContentRecycleElement(RecycleView):
             w = self.__cache[name]
             del self.__cache[name]
             return w
+
+    def add_widget(self, widget, *largs):
+        self.action_bind(widget)
+        super(WidgetPageContentRecycleElement, self).add_widget(widget, *largs)
+
+    def remove_widget(self, widget, *largs):
+        self.action_unbind(widget)
+        super(WidgetPageContentRecycleElement, self).remove_widget(widget, *largs)
 
 class WidgetPageContentBaseElement(WidgetPageContentRecycleElement):
     def __init__(self, id, row_elems, cls_kwargs, **layout_kwargs):
