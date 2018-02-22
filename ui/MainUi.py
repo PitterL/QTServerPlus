@@ -58,7 +58,7 @@ class MainScreen(Screen):
             msg = self.pipe_ui_with_server.recv()
             type = msg.type()
             id = msg.id()
-            print("Process<{}> recv message: {}".format(self.__class__.__name__, msg))
+            #print("Process<{}> recv message: {}".format(self.__class__.__name__, msg))
             #create or remove device window, root window only process this message
             if type == Message.MSG_DEVICE_ATTACH:
                 self.add_or_remove_window(id, msg.value())  # detach

@@ -63,6 +63,13 @@ class Page(object):
     def __repr__(self):
         return super(Page, self).__repr__() + '(' + self.__str__() + ')'
 
+    def __iter__(self):
+        return iter(self.__buffer)
+
+    def __getitem__(self, key):
+        if key < len(self.__buffer):
+            return self.__buffer[key]
+
     # def compound(self):
     #     return self.sub_id() >= 0
 
@@ -94,18 +101,24 @@ class Page(object):
     def save_to_buffer(self, start, data):
         if not isinstance(data, type(self.__buffer)):
             MemError("save data type not support {}".format(type(data)))
+            return
 
-        if start != len(self.__buffer):
-            MemError("save data offset not support start={} buffer len={}".format(start, len(self.__buffer)))
+        if not len(data):
+            MemError("save data length zero {}".format(type(data)))
+            return
 
-        if start != len(self.__buffer):
-            MemError("save data offset not support start={} buffer len={}".format(start, len(self.__buffer)))
+        # if start != len(self.__buffer):
+        #     MemError("save data offset not support start={} buffer len={}".format(start, len(self.__buffer)))
+        #     return
+        # if start != len(self.__buffer):
+        #     MemError("save data offset not support start={} buffer len={}".format(start, len(self.__buffer)))
 
         if start + len(data) > self.length:
             MemError("save data lenght over start+data {} buffer max len={}".format(start + len(data), self.length))
+            return
         else:
             self.__buffer[start: start + len(data)] = data
-
+            return len(self.__buffer)
     """
     def clear_cache(self):
         del self.cache[:]

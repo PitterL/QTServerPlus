@@ -4,12 +4,13 @@ kivy.require('1.0.6') # replace with your current kivy version !
 #from kivy.lang import Builder
 
 from kivy.uix.boxlayout import BoxLayout
+from kivy.clock import Clock
 
 from server.message import Message, UiMessage, Token
 from server.devinfo import Page
 
 from tools.mem import ChipMemoryMap
-#from ui.PageElement import PageElementRoot, WidgetPageElement
+#from ui.PageElement import PageContext, WidgetPageElement
 #from ui.PageElement import WidgetPageElement
 #from ui.PageControlBar import UpControlBar, DownControlBar, LeftControlBar, RightControlBar, CenterContentBar
 
@@ -21,7 +22,7 @@ class WinError(Exception):
     pass
 
 class DeviceWindow(BoxLayout):
-    CMD_STACK_DEPTH = 1
+    CMD_STACK_DEPTH = 1000
     (UP_CONTROL_BAR, DOWN_CONTROL_BAR, LEFT_CONTROL_BAR, right_CONTROL_BAR, CENTER_CONTENT_BAR) = ("up", 'down', 'left', 'right', 'center')
 
     def __init__(self, id, *args, **kwargs):
@@ -35,6 +36,7 @@ class DeviceWindow(BoxLayout):
         super(DeviceWindow, self).__init__(*args, **kwargs)
 
         self._center = self.ids[DeviceWindow.CENTER_CONTENT_BAR]
+        self._center.bind(action=self.on_action)
         self._dbg_view = DebugView.register_debug_view()
         self._msg_view = MessageView.register_message_view()
 
@@ -56,6 +58,7 @@ class DeviceWindow(BoxLayout):
             WinError("command still in process {}", self.cmd_list)
             self.cmd_list.pop()
 
+        #print(self.__class__.__name__, msg, self.cmd_list)
         self.cmd_list.append(msg)
 
     def prepare_debug_command(self):
@@ -69,6 +72,7 @@ class DeviceWindow(BoxLayout):
     def send_command_to(self, pipe):
         if len(self.cmd_list):
             busy = any([cmd.is_status(cmd.SEND) for cmd in self.cmd_list])
+            #print(self.__class__.__name__,self.cmd_list, busy)
             if not busy:
                 self.cmd_list[0].send_to(pipe)
 
@@ -122,15 +126,24 @@ class DeviceWindow(BoxLayout):
                 self.create_page_element(page_id)
                 #print(self.__class__.__name__, "create_page_element", widget)
 
-        self._center.switch_to_page(Page.ID_INFORMATION)
+        #self._center.switch_to_page(Page.ID_INFORMATION)
+        Clock.schedule_once(lambda dt: self._center.switch_to_page(Page.ID_INFORMATION))
 
     def distory_page_element(self):
         self.clear_elements()
 
+    def update_page_value(self):
+        page_mm = self.chip.get_mem_map_tab(page_id)
+        if page_mm:
+            page_mm.set_values(page_cache.buf())
+
     def update_page_element(self, page_cache):
+        if not self.chip:
+            return
+
         page_id = page_cache.id()
-        if not self.chip and page_id == Page.ID_INFORMATION:
-            self.create_chip(page_cache)
+        # if not self.chip and page_id == Page.ID_INFORMATION:
+        #     self.create_chip(page_cache)
 
         page_mm = self.chip.get_mem_map_tab(page_id)
         if page_mm:
@@ -159,6 +172,20 @@ class DeviceWindow(BoxLayout):
             command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
             self.prepare_command(command)
 
+    def on_action(self, inst, action):
+        print(self.__class__.__name__, inst, action)
+        op = action.get('op')
+        if op.startswith('w'):
+            page_id = action.get('page_id')
+            page_mm = self.chip.get_mem_map_tab(page_id)
+            if page_mm:
+                value = page_mm.raw_values()
+                #value = action.get('value')
+                print(self.__class__.__name__, "on_action", "{}: Page {}".format(op, page_id))
+                kwargs = {'page_id': page_id, 'value':value}
+                command = UiMessage(Message.CMD_DEVICE_PAGE_WRITE, self.id(), self.next_seq(), **kwargs)
+                self.prepare_command(command)
+
     def handle_attach_msg(self, data):
         #self.prepare_command(Message(Message.CMD_POLL_DEVICE_DEVICE, self.id(), self.next_seq()))
         pass
@@ -181,6 +208,7 @@ class DeviceWindow(BoxLayout):
 
         page_id = page_cache.id()
         if page_id == Page.ID_INFORMATION:
+            self.create_chip(page_cache)
             kwargs = {'page_id': Page.OBJECT_TABLE, 'discard': False}
             command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
             self.prepare_command(command)
@@ -188,8 +216,9 @@ class DeviceWindow(BoxLayout):
             self.create_chip_pages_element()
             self.create_msg_view_element(page_id)
 
-    def handle_page_write_msg(self, data):
-        self.ids["message"] == "Page write: {}".format(data)
+    def handle_page_write_msg(self, page):
+        #self.ids["message"] == "Page write: {}".format(data)
+        print(self.__class__.__name__, "page write done", page.id())
 
     def handle_dbg_msg(self, data):
         if self._dbg_view:
@@ -298,7 +327,7 @@ if __name__ == '__main__':
                 Message('local', Message.MSG_DEVICE_PAGE_READ, Page.OBJECT_TABLE, root.next_seq(),
                         value=mm.get_page(Page.OBJECT_TABLE))]
     #page x
-    page_id_list = [(7,0), (6,0), (37,0)]
+    page_id_list = [(7,0), (6,0), (37,0),(8,0), (15,0), (15, 1)]
     for page_id in page_id_list:
         page_cache = mm.get_page(page_id)
         cache = array.array('B', range(page_cache.length))

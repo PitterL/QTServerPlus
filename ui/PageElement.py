@@ -23,8 +23,10 @@ from collections import OrderedDict
 from kivy.properties import BooleanProperty
 
 from server.devinfo import Page
+
+from ui.TableElement import WidgetPageBehavior, LayerBehavior, ActionEvent
 from ui.TableElement import WidgetPageContentRecycleElement
-from ui.TableElement import WidgetPageBehavior, WidgetPageContentTitleElement, WidgetPageContentDataElement
+from ui.TableElement import WidgetPageContentTitleElement, WidgetPageContentDataElement
 from ui.TableElement import WidgetRowTitleElement, WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement
 from ui.TableElement import WidgetFieldElement, WidgetFieldLabelName, WidgetFieldLabelValue, WidgetFieldInputValue
 from ui.TableElement import WidgetFieldIndexElement, WidgetFieldIndexName, WidgetFieldTitleName
@@ -86,6 +88,7 @@ class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
         return kwargs
 
     def __init__(self, page_mm):
+        #self.page_mm = page_mm
         page_id = page_mm.id()
         print(self.__class__.__name__, "init_page", page_id)
         parent_inst = page_mm.parent_inst()
@@ -106,22 +109,30 @@ class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
             name = "{}".format(major)
         return name
 
-class WidgetPageMultiInstElement(TabbedPanelItem):
+    def on_action(self, inst, action):
+        if inst is not self:
+            #value = self.page_mm.raw_values()
+            self.action = dict(page_id=self.id(), **action)
+
+class WidgetPageMultiInstElement(ActionEvent, LayerBehavior, TabbedPanelItem):
 
     selected = BooleanProperty(False)
 
     def __init__(self, major, insts, **kwargs):
+        #super(WidgetPageMultiInstElement, self).__init__(text=str(major), **kwargs)
         self.major = major
         self.insts = insts
-        self.__pages_tab = {}
+        #self.__pages_tab = {}
 
-        super(WidgetPageMultiInstElement, self).__init__(text=str(major), **kwargs)
+        ActionEvent.__init__(self)
+        LayerBehavior.__init__(self)
+        TabbedPanelItem.__init__(self, text=str(major), **kwargs)
+
         self._content = self.ids['content']
-
         #print(self.__class__.__name__, "init", self)
 
     def __str__(self):
-        return super(WidgetPageMultiInstElement, self).__str__() + "{} {} {}".format(self.major, self.insts, self.__pages_tab.keys())
+        return super(WidgetPageMultiInstElement, self).__str__() + "[id{}] [insts {}]: {}".format(self.id(), self.insts, self.get_layer_names())
 
     def id(self):
         return self.major
@@ -149,40 +160,49 @@ class WidgetPageMultiInstElement(TabbedPanelItem):
         tab = self._content.get_current_tab()
         if isinstance(tab, TabbedPanelHeader):
             page_id = (self.major, 0)
-            print(self.__class__.__name__, "on_page_selected", "switch to default page ", page_id)
+            print(self.__class__.__name__, "on_page_selected", self.major, ",switch to first instance ")
             w = self.get_page(page_id)
             if w:
                 self._content.switch_to(w)
-                tab = self._content.get_current_tab()
-                tab.dispatch('on_press')
+                w.dispatch('on_press')
+                # tab = self._content.get_current_tab()
+                # tab.dispatch('on_press')
 
     def get_page(self, page_id):
-        return self.__pages_tab.get(page_id, None)
+        #return self.__pages_tab.get(page_id, None)
+        return super(WidgetPageMultiInstElement, self).get_layer(page_id)
 
     def add_page(self, page_id, w_page):
-        self.__pages_tab[page_id] = w_page
+        #self.__pages_tab[page_id] = w_page
+        super(WidgetPageMultiInstElement, self).add_layer(page_id, w_page)
+        super(WidgetPageMultiInstElement, self).action_bind(w_page)
         self._content.add_widget(w_page)
 
     def remove_page(self, page_id):
-        widget = self.get_element(page_id)
-        if widget:
-            widget.clear_widgets()
-            del self.__pages_tab[page_id]
+        w = self.remove_layer(page_id)
+        if w:
+            super(PageContext, self).action_unbind(w)
+            self.remove_widget(w)
 
     def clear_pages(self):
-        self.__pages_tab.clear()
-        super(WidgetPageMultiInstElement, self).clear_widgets()
+        for name in super(PageContext, self).get_layer_names():
+            w = super(PageContext, self).get_layer(name)
+            super(PageContext, self).action_unbind(w)
 
-    def do_fresh(self, page_mm):
+        self.clear_widgets()
+
+    def do_fresh(self, page_mm=None):
         page_id = page_mm.id()
-        widget = self.get_element(page_id)
-        if widget:
-            widget.do_fresh(page_mm)
+        w = self.get_page(page_id)
+        if w:
+            w.do_fresh(page_mm)
 
-class PageElementRoot(TabbedPanel):
+class PageContext(ActionEvent, LayerBehavior, TabbedPanel):
     def __init__(self, **kwargs):
-        self.__elems_tab = {}
-        super(PageElementRoot, self).__init__(**kwargs)
+        LayerBehavior.__init__(self)
+        ActionEvent.__init__(self)
+        TabbedPanel.__init__(self, **kwargs)
+        #self.__elems_tab = {}
 
     def get_element(self, elem_id):
         if isinstance(elem_id, tuple):
@@ -190,16 +210,36 @@ class PageElementRoot(TabbedPanel):
         else:
             major = elem_id
 
-        w = self.__elems_tab.get(major)
+        #w = self.__elems_tab.get(major)
+        w = super(PageContext, self).get_layer(major)
         if w:
             if w.id() == elem_id:
                 return w
             else:
                 return w.get_page(elem_id)
 
-    def add_element(self, major_id, w_pages):
-        self.__elems_tab[major_id] = w_pages
-        super(PageElementRoot, self).add_widget(w_pages)
+    def add_layer(self, major, w_page):
+        #self.__elems_tab[major_id] = w_pages
+        super(PageContext, self).add_layer(major, w_page)
+        super(PageContext, self).action_bind(w_page)
+        self.add_widget(w_page)
+
+    def remove_layer(self, major):
+        w = super(PageContext, self).get_layer(major)
+        if w:
+            #del self.__elems_tab[major_id]
+            super(PageContext, self).remove_layer(major)
+            super(PageContext, self).action_unbind(w)
+            self.remove_widget(w)
+
+    def clear_layers(self, **kwargs):
+        #self.__elems_tab.clear()
+        #super(PageContext, self).clear_layer()
+        for name in super(PageContext, self).get_layer_names():
+            w = super(PageContext, self).get_layer(name)
+            super(PageContext, self).action_unbind(w)
+
+        self.clear_widgets(**kwargs)
 
     def create_page_element(self, page_mm):
         parent_inst = page_mm.parent_inst()
@@ -209,35 +249,22 @@ class PageElementRoot(TabbedPanel):
             parent_widget = self.get_element(major)
             if not parent_widget:
                 parent_widget = WidgetPageMultiInstElement(major, parent_inst)
-                self.add_element(major, parent_widget)
+                self.add_layer(major, parent_widget)
             widget = WidgetPageElement(page_mm)
             parent_widget.add_page(page_id, widget)
         else:
             widget = WidgetPageElement(page_mm)
-            self.add_element(major, widget)
+            self.add_layer(major, widget)
 
         return widget
 
-    def remove_element(self, major_id):
-        widget = self.get_element(major_id)
-        if widget:
-            del self.__elems_tab[major_id]
-            super(PageElementRoot, self).remove_widget(widget)
-
-    def clear_elements(self, **kwargs):
-        self.__elems_tab.clear()
-        super(PageElementRoot, self).clear_widgets(**kwargs)
-
-    def switch_to_page(self, elem_id):
-        w = self.get_element(elem_id)
+    def switch_to_page(self, page_id):
+        major, _ = page_id
+        w = super(PageContext, self).get_layer(major)
         if w:
             self.switch_to(w)
-            # tab = self.get_current_tab()
-            # #print(self.__class__.__name__, "set_default_element", tab)
-            # if isinstance(tab, TabbedPanelHeader):
-            #     self.switch_to(widget)
-            #     tab = self.get_current_tab()
-            #     tab.dispatch('on_press')
+            #tab = self.get_current_tab()
+            w.dispatch('on_press')
 
 if __name__ == '__main__':
 
@@ -252,7 +279,7 @@ if __name__ == '__main__':
 
         def build(self):
 
-            root = PageElementRoot()
+            root = PageContext()
 
             v_chip_id = array.array('B', [164, 24, 16, 170, 32, 20, 40])
             chip = ChipMemoryMap.get_chip_mmap(v_chip_id)
@@ -285,8 +312,8 @@ if __name__ == '__main__':
                 return result
 
             chip.create_chip_mmap_pages()
-            all_page_mmaps = chip.get_mem_map_tab()
-            for mmap in sorted(all_page_mmaps.values(), key=sort_key)[4:5]:
+            page_mmaps = chip.get_mem_map_tab()
+            for mmap in sorted(page_mmaps.values(), key=sort_key)[4:5]:
                 page_id = mmap.id()
                 widget = root.get_element(page_id)
                 if not widget:

@@ -273,19 +273,19 @@ class WidgetFieldInputValue(TextInput):
         except:
             print("Invalid input value:", text)
 
-    def on_enter(self, *args):
-        action = {'row': self.row, 'col': self.col, 'type': self.type(), 'value':self.value}
+    def write(self, mode):
+        action = {'row': self.row, 'col': self.col, 'type': self.type(), 'value':self.value, 'op': mode}
         print(self.__class__.__name__, "on_enter", action)
         self.action = action
 
-    def on_text_validate(self, send=True):
+    # if enter is pressed, execute write through to device, otherwith only write back to memory
+    def on_text_validate(self, mode='wt'):
         val = self._convert_text(self.text)
         if isinstance(val, int):
             if val != self.value:
                 self.set_value(val)
                 self.clr_err()
-                if send:
-                    self.on_enter()
+                self.write(mode)
         else:
             print(self.__class__.__name__, "input error:", self.text)
             self.set_error('v')
@@ -312,26 +312,26 @@ class ActionEvent(object):
     def action_bind(self, widget):
         action = widget.property('action', True)
         if action:
-            print(self.__class__.__name__, "bind:", widget, "---", self)
+            #print(self.__class__.__name__, "bind:", widget, "---", self)
             widget.bind(action=self.on_action)
 
     def action_unbind(self, widget):
         action = widget.property('action', True)
         if action:
-            print(self.__class__.__name__, "unbind:", widget, "---", self)
+            #print(self.__class__.__name__, "unbind:", widget, "---", self)
             widget.unbind(action=self.on_action)
 
 Factory.register('ActionEvent', cls=ActionEvent)
 
 class LayerBehavior(object):
-    def __init__(self, **kwargs):
+    def __init__(self):
         self.__layers = {}
 
-    def __iter__(self):
-        return iter(self.__layers)
-
-    def __len__(self):
-        return len(self.__layers)
+    # def __iter__(self):
+    #     return iter(self.__layers)
+    #
+    # def __len__(self):
+    #     return len(self.__layers)
 
     def get_layer_names(self):
         return tuple(self.__layers.keys())
@@ -343,19 +343,24 @@ class LayerBehavior(object):
         return self.__layers.get(name)
 
     def add_layer(self, name, widget):
+        assert name not in self.__layers
         self.__layers[name] = widget
 
     def remove_layer(self, name):
+        assert name in self.__layers
         if name in self.__layers.keys():
             w = self.__layers[name]
             del self.__layers[name]
             return w
+    #DON'T OFFER CLEAR INTERFACE
+    # def clear_layer(self):
+    #     self.__layers.clear()
 
 Factory.register('LayerBehavior', cls=LayerBehavior)
 
 class LayerBoxLayout(LayerBehavior, ActionEvent, BoxLayout):
     def __init__(self, **kwargs):
-        #super(LayerBoxLayout, self).__init__(*args, **kwargs)  #why couldn't use this?
+        #super(LayerBoxLayout, self).__init__(**kwargs)  #why couldn't use this?
         LayerBehavior.__init__(self)
         ActionEvent.__init__(self)
         BoxLayout.__init__(self, **kwargs)
@@ -556,6 +561,7 @@ class WidgetRowElement(WidgetRowElementBase):
         page_id = v_kwargs.get('page_id')
         row_id = v_kwargs.get('row_id')
         row_elem = v_kwargs.get('row_elem')
+        self.row_elem = row_elem
 
         c_kwargs = kwargs.get('cls_kwargs')
         l_kwargs =  kwargs.get('layout_kwargs', dict())
@@ -594,6 +600,21 @@ class WidgetRowElement(WidgetRowElementBase):
             layout = self.get_child_layer([self.CHILD_ELEM_DATA, name])
             if layout:
                 layout.set_value(field.value)
+
+    def update_cache(self, **kwargs):
+        col = kwargs['col']
+        val = kwargs['value']
+        for j, (name, field) in enumerate(self.row_elem):
+            if j == col:
+                field.set_value(val)
+                break
+
+    def on_action(self, inst, action):
+        if inst != self:
+            op = action.get('op')
+            self.update_cache(**action)
+            if op == 'wt':  #only write through will report to hight layer
+                self.action = action
 
 class WidgetRowTitleElement(WidgetRowElement):
     pass
@@ -722,22 +743,25 @@ class WidgetPageContentTitleElement(LayerBoxLayout):
 class WidgetPageContentDataElement(WidgetPageContentBaseElement):
     pass
 
+
 class WidgetPageBehavior(LayerBehavior, ActionEvent):
-    (PAGE_CHILD_ELEM_TITLE, PAGE_CHILD_ELEM_CONTENT) = ('Title', 'Content')
+    (PAGE_CONTENT_TITLE, PAGE_CONTENT_DATA) = ('Title', 'Content')
     (W_TITLE, W_CONTENT) = range(2)
 
     selected = BooleanProperty(False)
 
     def __init__(self, parent_widget, id, cls_kwargs):
         super(WidgetPageBehavior, self).__init__()
+        # LayerBehavior.__init__(self)
+        # ActionEvent.__init__(self)
         self._parent = parent_widget
         self._id = id
         self._c_kwargs = cls_kwargs
         #self.__layout = {}
 
     def inited(self):
-        #return self.PAGE_CHILD_ELEM_CONTENT in self.__layout.keys()
-        return self.get_layer(self.PAGE_CHILD_ELEM_CONTENT)
+        #return self.PAGE_CONTENT_DATA in self.__layout.keys()
+        return self.get_layer(self.PAGE_CONTENT_DATA)
 
     def id(self):
         return self._id
@@ -783,23 +807,23 @@ class WidgetPageBehavior(LayerBehavior, ActionEvent):
              cls_kwargs = self._c_kwargs['title']
              cls_content = cls_kwargs['class_content']
              widget = cls_content(self.id(), page_mm.title, cls_kwargs)
-             self.add_layer(self.PAGE_CHILD_ELEM_TITLE, widget)
+             self.add_layer(self.PAGE_CONTENT_TITLE, widget)
 
-         # create title layout
+         # create data layout
          cls_kwargs = self._c_kwargs['data']
          cls_content = cls_kwargs['class_content']
          widget = cls_content(self.id(), page_mm, cls_kwargs)
-         self.add_layer(self.PAGE_CHILD_ELEM_TITLE, widget)
+         self.add_layer(self.PAGE_CONTENT_DATA, widget)
 
-    def do_fresh(self, page_mm):
+    def do_fresh(self, page_mm=None):
 
-        if not page_mm.valid():
-            print("{} data invalid, {}".format(page_mm.id(), page_mm))
-            return
+        # if not page_mm.valid():
+        #     print("{} data invalid, {}".format(page_mm.id(), page_mm))
+        #     return
 
         if self.inited():
             #FIXME: here row_mm may be same as page_mm.row()
-            layout = self.get_layer(self.PAGE_CHILD_ELEM_CONTENT)
+            layout = self.get_layer(self.PAGE_CONTENT_DATA)
             # for i, data in enumerate(layout.data):
             #     w_row_kwargs = data.get('w_row_kwargs')
             #     if 'row_mm' in w_row_kwargs.keys():
@@ -810,5 +834,6 @@ class WidgetPageBehavior(LayerBehavior, ActionEvent):
             #         print(self.__class__.__name__, "Not support value fresh: ", w_row_kwargs)
             layout.refresh_from_data()
         else:
-            print(self.__class__.__name__, "do_fresh", "create_page_content_widget", page_mm.id())
-            self.create_page_content_widget(page_mm)
+            if page_mm:
+                print(self.__class__.__name__, "do_fresh", "create_page_content_widget", page_mm.id())
+                self.create_page_content_widget(page_mm)

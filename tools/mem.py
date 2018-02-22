@@ -24,6 +24,12 @@ class RowElement(object):
         def __repr__(self):
             return self.__str__()
 
+        def set_value(self, value):
+            if value < self.max_value:
+                self.value = value
+            else:
+                print(self.__class__.__name__, "set_value overflow", self, value)
+
     def __init__(self, row_desc):
         self.idx_desc = row_desc.idx
         self.content_desc = row_desc.content
@@ -75,11 +81,7 @@ class RowElement(object):
     def set_field(self, name, val):
         if name in self.fields.keys():
             field = self.fields[name]
-            max_value = (1 << field.width) - 1
-            if val > max_value:
-                raise ElemError("Filed {} width {} bit, value{} over max".format(name, field.width, val))
-
-            field.value = val
+            field.set_value(val)
 
     def get_field(self, name):
         #print(self.__class__.__name__, name, self.fields.keys(), name in self.fields.keys())
@@ -120,12 +122,19 @@ class RowElementByte(object):
                 self.c_type = 'B'
 
             self.value = 0
+            self.max_value = 0xff << width
 
         def __str__(self):
             return "{}({s}, {w}, {v}, '{c}')".format(self.__class__.__name__, s=self.start, w=self.width, v=hex(self.value), c=self.c_type)
 
         def __repr__(self):
             return self.__str__()
+
+        def set_value(self, value):
+            if value < self.max_value:
+                self.value = value
+            else:
+                print(self.__class__.__name__, "set_value overflow", self, value)
 
     def __init__(self, row_desc):
         self.idx_desc = row_desc.idx
@@ -176,11 +185,7 @@ class RowElementByte(object):
     def set_field(self, name, val):
         if name in self.fields.keys():
             field = self.fields[name]
-            max_value = (1 << (field.width + 8)) - 1
-            if val > max_value:
-                raise ElemError("Filed {} width {} bit, value{} over max".format(name, field.width, val))
-
-            field.value = val
+            field.set_value(val)
 
     def get_field(self, name):
         if name in self.fields.keys():

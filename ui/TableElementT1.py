@@ -53,7 +53,7 @@ class WidgetT1RowElement(WidgetRowElementBase):
             self.add_layer(self.CHILD_ELEM_INDEX, cls_row_idx())
             for i, (name, value) in enumerate(idx_content.items()):
                 w_field = self.create_field_element(col_idx=i, name=name, value=value, cls_kwargs=cls_idx_field)
-                self.add_children_layer([self.CHILD_ELEM_INDEX, name], w_field)
+                self.add_child_layer([self.CHILD_ELEM_INDEX, name], w_field)
 
         #data content
         if cls_row_data:

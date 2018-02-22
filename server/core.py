@@ -11,7 +11,7 @@ class ServerError(Exception):
     pass
 
 class LogicDevice(Mm):
-    CMD_STACK_DEPTH = 1
+    CMD_STACK_DEPTH = 1000
     INTERVAL_POLL_DEVICE = None  #seconds
     PAGE_ID_INFORMATION_QUERY_CONNECTED = False #test purpose
 
@@ -31,8 +31,9 @@ class LogicDevice(Mm):
     def match_seq(self, seq):
         return self.cmd_seq == cmd_seq
 
-    def next_seq(self, token):
+    def next_seq(self, t):
         self.cmd_seq += 1
+        token = t.copy()
         token.append(self.cmd_seq)
         return token
 
@@ -53,7 +54,7 @@ class LogicDevice(Mm):
             command = ServerMessage(Message.CMD_POLL_DEVICE, self.id(), self.next_seq(Message.seq_root()), **kwargs)
             self.prepare_command(command)
         else:
-            message = ServerMessage(Message.MSG_DEVICE_ATTACH, self.id(), self.next_seq(seq), value=None)
+            message = ServerMessage(Message.MSG_DEVICE_ATTACH, self.id(), seq, value=None)
             self.prepare_message(message)
 
     def handle_connected_msg(self, seq, data):
@@ -65,49 +66,90 @@ class LogicDevice(Mm):
 
         address = 0x01  #FIXME: need report device Phy I2C Address
 
-        message = ServerMessage(Message.MSG_DEVICE_CONNECTED, self.id(), self.next_seq(seq), value=address)
+        message = ServerMessage(Message.MSG_DEVICE_CONNECTED, self.id(), seq, value=address)
         self.prepare_message(message)
 
     def handle_page_read_msg(self, seq, cmd, data):
         type = cmd.type()
         cmd_info = cmd.extra_info()
         cmd_addr = cmd_info['addr']
-        cmd_size = cmd_info['size']
+        cmd_size = cmd_info['size'] # how many data is left
         cmd_page_id = cmd_info['page_id']
 
-        print(self.__class__.__name__, "handle_page_read_msg", cmd, data)
+        #print(self.__class__.__name__, "handle_page_read_msg", cmd, data)
 
-        data_size = len(data['value'])
+        data_size = len(data['value'])  #current readout data size
+        if data_size == 0 or data_size > cmd_size:  #something error
+            self.handle_nak_msg(seq, cmd, "data_size is invalid data_size {} cmd_size {}".format(data_size, cmd_size))
+            return
+
         page = self.get_page(cmd_page_id)
         start = cmd_addr - page.addr()
-        page.save_to_buffer(start, data['value'])
+        result = page.save_to_buffer(start, data['value'])
+        if not result:
+            self.handle_nak_msg(seq, cmd, "save_to_buffer error start {} data {}".format(start, data['value']))
+            return
 
-        if data_size == cmd_size:
+        if data_size == cmd_size: # no data left
             result = self.page_parse(cmd_page_id)
             if result:
-                message = ServerMessage(Message.MSG_DEVICE_PAGE_READ, self.id(), self.next_seq(seq), value=page)
+                message = ServerMessage(Message.MSG_DEVICE_PAGE_READ, self.id(), seq, value=page)
+                self.prepare_message(message)
             else:   #failed
                 page.clear_buffer()
-                message = ServerMessage(Message.MSG_DEVICE_PAGE_READ, self.id(), self.next_seq(seq), value=None)
-
-            self.prepare_message(message)
-
+                self.handle_nak_msg(seq, cmd)
         else:
-            command = ServerMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(Message.seq_root()),
+            command = ServerMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(seq),
                                     addr=cmd_addr + data_size, size=cmd_size - data_size, page_id=cmd_page_id)
             self.prepare_command(command)
 
+    def handle_page_write_msg(self, seq, cmd, data):
+        type = cmd.type()
+        cmd_info = cmd.extra_info()
+        cmd_addr = cmd_info['addr']
+        cmd_value = cmd_info['value']   # store how many data will be sent
+        cmd_group = cmd_info.pop('group', None)
+        cmd_size = len(cmd_value)
+        cmd_page_id = cmd_info['page_id']
+
+        #print(self.__class__.__name__, "handle_page_write_msg", cmd, data)
+
+        data_size = data['value']
+        if data_size == 0 or data_size > cmd_size:  #something error
+            self.handle_nak_msg(seq, cmd, "data_size is invalid data_size {} cmd_size {}".format(data_size, cmd_size))
+            return
+
+        page = self.get_page(cmd_page_id)
+        start = cmd_addr - page.addr()
+        result = page.save_to_buffer(start, cmd_value[:data_size])
+        if not result:
+            self.handle_nak_msg(seq, cmd, "save_to_buffer error start {} data {}".format(start, data['value']))
+            return
+
+        if data_size == len(cmd_value):
+            if not cmd_group:
+                message = ServerMessage(Message.MSG_DEVICE_PAGE_WRITE, self.id(), seq, value=page)
+                self.prepare_message(message)
+            else:
+                self.prepare_command(cmd_group)
+        else:
+            #size = cmd_size - data_size
+            value = cmd_value[data_size:]
+            command = ServerMessage(Message.CMD_DEVICE_PAGE_WRITE, self.id(), self.next_seq(seq),
+                                    addr=cmd_addr + data_size, value=value, page_id=cmd_page_id)
+            self.prepare_command(command)
+
     def handle_raw_data_msg(self, seq, cmd, data):
-        message = ServerMessage(Message.MSG_DEVICE_RAW_DATA, self.id(), self.next_seq(seq), value=data['value'])
+        message = ServerMessage(Message.MSG_DEVICE_RAW_DATA, self.id(), seq, value=data['value'])
         self.prepare_message(message)
 
     def handle_interrupt_data_msg(self, seq, data):
-        message = ServerMessage(Message.MSG_DEVICE_INTERRUPT_DATA, self.id(), self.next_seq(seq), value=data['value'])
+        message = ServerMessage(Message.MSG_DEVICE_INTERRUPT_DATA, self.id(), seq, value=data['value'])
         self.prepare_message(message)
 
-    def handle_nak_msg(self, seq, cmd):
-        print(self.__class__.__name__, "Get NAK message:", seq, cmd)
-        message = ServerMessage(Message.MSG_DEVICE_NAK, self.id(), self.next_seq(seq))
+    def handle_nak_msg(self, seq, cmd, info=None):
+        print(self.__class__.__name__, "Send NAK message:", seq, cmd,info)
+        message = ServerMessage(Message.MSG_DEVICE_NAK, self.id(), seq, info=info)
         self.prepare_message(message)
 
     def prepare_message(self, message):
@@ -136,6 +178,8 @@ class LogicDevice(Mm):
                         self.handle_page_read_msg(seq, cmd, msg.extra_info())
                     elif type == Message.MSG_DEVICE_BLOCK_READ:
                         self.handle_block_read_msg(seq, cmd, msg.extra_info())
+                    elif type == Message.CMD_DEVICE_PAGE_WRITE:
+                        self.handle_page_write_msg(seq, cmd, msg.extra_info())
                     elif type == Message.CMD_DEVICE_RAW_DATA:
                         self.handle_raw_data_msg(seq, cmd, msg.extra_info())
                     elif type == Message.MSG_DEVICE_NAK:
@@ -147,10 +191,20 @@ class LogicDevice(Mm):
                     del self.cmd_list[i]
                     break
 
+    def group_command(self, cmd_list):
+        command = cmd_list[0]
+        if len(cmd_list) > 1:
+            command.set_extra_info(group=cmd_list[1:])
+
+        return command
+
     def prepare_command(self, command):
         if len(self.cmd_list) > self.CMD_STACK_DEPTH:   #command may have two in stack, one in prepare, one will be processing and done
-            ServerError("command still in process {}", self.cmd_list)
+            raise ServerError("command still in process {}", self.cmd_list)
             self.cmd_list.pop()
+
+        if isinstance(command, (tuple, list)):
+            command = self.group_command(command)
 
         #self.cmd_list.append(Message(type, self.id(), self.next_seq(seq), **kwargs, pipe=self.pipe()))
         command.set_pipe(self.pipe())
@@ -159,24 +213,7 @@ class LogicDevice(Mm):
     def send_command(self):
         for cmd in self.cmd_list:
             cmd.send()
-
         #FIXME: when remove the command from list?
-
-    def page_read(self, page_id, discard=False):
-        if self.has_page(page_id):
-            page = self.get_page(page_id)
-            if discard:
-                page.clear_buffer()
-
-            if page.buffer_data_valid():
-                return page
-            else:
-                kwargs = {'page_id': page_id}
-                command = ServerMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(Message.seq_root()),
-                                     addr=page.addr(), size=page.size(), page_id=page_id)
-                self.prepare_command(command)
-        else:
-            ServerError("Unknown page {} requested".format(page_id))
 
     def handle_device_page_read(self, seq, kwargs):
         page_id = kwargs.get('page_id')
@@ -184,7 +221,6 @@ class LogicDevice(Mm):
 
         if self.has_page(page_id):
             page = self.get_page(page_id)
-            valid_size = 0
             if discard:
                 page.clear_buffer()
 
@@ -192,16 +228,49 @@ class LogicDevice(Mm):
                 message = ServerMessage(Message.MSG_DEVICE_PAGE_READ, self.id(), seq, value=page)
                 self.prepare_message(message)
             else:
-                self.page_read(page_id, discard)
+                kwargs = {'page_id': page_id}
+                command = ServerMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(seq),
+                                        addr=page.addr(), size=page.size(), page_id=page_id)
+                self.prepare_command(command)
         else:
-            ServerError("Unknown page {} requested".format(page_id))
+            ServerError("Unknown page read {} requested".format(page_id))
             self.nak_command(seq)
 
     def handle_device_page_write(self, seq, kwargs):
-        pass
+        page_id = kwargs.get('page_id')
+        offset = kwargs.get('offset', 0)
+        value = kwargs.get('value')
+        assert isinstance(value, (tuple, list, array.array))
+
+        if self.has_page(page_id):
+            page = self.get_page(page_id)
+            buf = page.buf()
+            # page = Page(page_id, offset, len(value))
+            # page.save_to_buffer(offset, array.array('B', value))
+            st = None
+            cmd_list = []
+            for i, v in enumerate(value):
+                if v != buf[offset + i]:
+                    if st is None:
+                        st = i
+                else:
+                    if st is not None:
+                        cmd = ServerMessage(Message.CMD_DEVICE_PAGE_WRITE, self.id(), self.next_seq(seq),
+                            addr=page.addr() + st + offset, size=i - st, value=value[st: i], page_id=page_id)
+                        cmd_list.append(cmd)    #build group command
+                        st = None
+            if st:  #last trunk
+                cmd = ServerMessage(Message.CMD_DEVICE_PAGE_WRITE, self.id(), self.next_seq(seq),
+                                    addr=page.addr() + st + offset, size=len(value) - st, value=value[st: ], page_id=page_id)
+                cmd_list.append(cmd)
+            if cmd_list:
+                self.prepare_command(cmd_list)
+        else:
+            ServerError("Unknown page write {} requested".format(page_id))
+            self.nak_command(seq)
 
     def handle_device_raw_send(self, seq, kwargs):
-        command = ServerMessage(Message.CMD_DEVICE_RAW_DATA, self.id(), self.next_seq(Message.seq_root()), **kwargs)
+        command = ServerMessage(Message.CMD_DEVICE_RAW_DATA, self.id(), self.next_seq(seq), **kwargs)
         self.prepare_command(command)
 
     def nak_command(self, seq):
@@ -212,7 +281,7 @@ class LogicDevice(Mm):
         type = msg.type()
         seq = msg.seq()
 
-        print(self.__class__.__name__, "handle_command", msg)
+        #print(self.__class__.__name__, "handle_command", msg)
 
         if type == Message.CMD_DEVICE_PAGE_READ:
             self.handle_device_page_read(seq, msg.extra_info())
@@ -327,7 +396,7 @@ class QTouchserver(object):
             for r in wait(all_pipes[:]):
                 #try:
                 msg = r.recv()
-                print("Process<{}> get message: {}".format(self.__class__.__name__, msg))
+                #print("Process<{}> get message: {}".format(self.__class__.__name__, msg))
 
                 location = msg.loc()
                 if location == Message.BUS or location == Message.DEVICE:

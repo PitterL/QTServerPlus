@@ -21,7 +21,7 @@ class BaseMessage(object):
         self._kwargs = kwargs
 
     def __repr__(self):
-        return super.__repr__() + " " + self.__str__()
+        return super(BaseMessage, self).__repr__() + " " + self.__str__()
 
     def __str__(self):
         return "[loc='{}' type={} id={} seq={}] extra: {}".format(self.loc(), self.type(), self.id(), self.seq(), self.extra_info())
@@ -41,6 +41,9 @@ class BaseMessage(object):
 
     def extra_info(self):
         return self._kwargs
+
+    def set_extra_info(self, **kwargs):
+        self._kwargs.update(kwargs)
 
     def value(self):
         info = self.extra_info()
@@ -80,7 +83,7 @@ class Message(BaseMessage):
         super(Message, self).__init__(location, type, id, seq, **kwargs)
 
     def __repr__(self):
-        return self.__repr__()
+        return super(Message, self).__repr__()
 
     def __str__(self):
         return super().__str__() + " " + "time={} ready={} status={}".format(self.time(), self.ready(), self.status())
@@ -101,6 +104,9 @@ class Message(BaseMessage):
     def set_pipe(self, pipe):
         self.pipe = pipe
 
+    def push_group(self, group):
+        self.group = group
+
     def ready(self):
         return self.status() == Message.INIT
 
@@ -117,7 +123,7 @@ class Message(BaseMessage):
         if self.ready():
             self.set_status(Message.SEND)
             data = self.msg_data()
-            print(self.__class__.__name__, "Send Message: {}".format(data))
+            print(self.__class__.__name__, "send: {}".format(data))
             pipe.send(data)
             return True
 
