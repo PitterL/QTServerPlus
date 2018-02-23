@@ -17,14 +17,13 @@ from kivy.properties import NumericProperty,  BooleanProperty, StringProperty, L
 from kivy.uix.behaviors import FocusBehavior
 from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 from kivy.animation import Animation
-#from kivy.uix.textinput import TextInput
 from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem, TabbedPanelHeader
-from server.devinfo import Page
-#from ui.uix.textinput import TextInput
-from kivy.factory import Factory
-
 from collections import OrderedDict
 import re
+
+from server.devinfo import Page
+
+from ui.WidgetExtension import ActionEvent, ActionBehavior, LayerBehavior, LayerBoxLayout
 
 class ElemError(Exception):
     "Message error exception class type"
@@ -173,11 +172,11 @@ class WidgetFieldLabelValue(WidgetFieldLabelBase):
         super(WidgetFieldLabelValue, self).__init__(row, col, v, max_v, self.TYPE_VALUE)
         self._type = self.TYPE_VALUE
 
-class WidgetFieldInputValue(TextInput):
+class WidgetFieldInputValue(ActionEvent, TextInput):
     (TYPE_NAME, TYPE_VALUE) = ('NAME', 'VALUE')
     PAT_INPUT_CHAR = re.compile("[\da-fA-FxX]")
 
-    action = DictProperty({})
+    #action = DictProperty({})
     # PG_ERROR = StringProperty('')
     # PG_NORMAL = StringProperty('')
     # PG_ACTIVE = StringProperty('')
@@ -299,131 +298,6 @@ class WidgetFieldInputValue(TextInput):
 
     def on_size(self, *args):
         self.padding[0] = self._get_padding_left(self.text)
-
-class ActionEvent(object):
-    action = DictProperty({})
-
-    def on_action(self, inst, action):
-        #override this action to process action, of call directly report action to higher level
-        if inst is not self:
-            print(self.__class__.__name__, "on_action", inst, action)
-            self.action = action
-
-    def action_bind(self, widget):
-        action = widget.property('action', True)
-        if action:
-            #print(self.__class__.__name__, "bind:", widget, "---", self)
-            widget.bind(action=self.on_action)
-
-    def action_unbind(self, widget):
-        action = widget.property('action', True)
-        if action:
-            #print(self.__class__.__name__, "unbind:", widget, "---", self)
-            widget.unbind(action=self.on_action)
-
-Factory.register('ActionEvent', cls=ActionEvent)
-
-class LayerBehavior(object):
-    def __init__(self):
-        self.__layers = {}
-
-    # def __iter__(self):
-    #     return iter(self.__layers)
-    #
-    # def __len__(self):
-    #     return len(self.__layers)
-
-    def get_layer_names(self):
-        return tuple(self.__layers.keys())
-
-    def get_layers(self):
-        return tuple(self.__layers.values())
-
-    def get_layer(self, name):
-        return self.__layers.get(name)
-
-    def add_layer(self, name, widget):
-        assert name not in self.__layers
-        self.__layers[name] = widget
-
-    def remove_layer(self, name):
-        assert name in self.__layers
-        if name in self.__layers.keys():
-            w = self.__layers[name]
-            del self.__layers[name]
-            return w
-    #DON'T OFFER CLEAR INTERFACE
-    # def clear_layer(self):
-    #     self.__layers.clear()
-
-Factory.register('LayerBehavior', cls=LayerBehavior)
-
-class LayerBoxLayout(LayerBehavior, ActionEvent, BoxLayout):
-    def __init__(self, **kwargs):
-        #super(LayerBoxLayout, self).__init__(**kwargs)  #why couldn't use this?
-        LayerBehavior.__init__(self)
-        ActionEvent.__init__(self)
-        BoxLayout.__init__(self, **kwargs)
-        self.prop_set_default_minimum_height = True
-
-    def set_default_minimum_height(self):
-        shw, shh = self.size_hint
-        if not shh:
-            if self.children:
-                if self.orientation == 'horizontal':
-                    height = self.children[0].height
-                else:
-                    height = sum([child.height for child in self.children])
-                self.minimum_height = height
-
-    def get_layer(self, name):
-        return super(LayerBoxLayout, self).get_layer(name)
-
-    def add_layer(self, name, widget):
-        super(LayerBoxLayout, self).add_layer(name, widget)
-        self.action_bind(widget)
-        self.add_widget(widget)
-
-        # RecycleView has some bug for fresh height = self.minimum_height, we should adjust it may manually
-        # so we should as the order, all children are created first, then added to parent widget
-        if self.prop_set_default_minimum_height:
-            self.set_default_minimum_height()
-
-    def remove_layer(self, name):
-        if name in super(LayerBoxLayout, self).get_layer_names():
-            w = super(LayerBoxLayout, self).get_layer(name)
-            self.action_unbind(w)
-            self.remove_widget(w)
-            super(LayerBoxLayout, self).remove_layer(name)
-
-    def detach_layer(self):
-        for n in super(LayerBoxLayout, self).get_layer_names():
-            self.remove_layer(n)
-
-    def clear_layer(self):
-        for layout in super(LayerBoxLayout, self).get_layers():
-            if isinstance(layout, LayerBoxLayout):
-                layout.clear_layer()
-            else:
-                self.remove_layer(layout)
-
-    def add_child_layer(self, child_name_nested, widget):
-        assert isinstance(child_name_nested, (tuple, list))
-        if len(child_name_nested) > 1:
-            layout = self.get_layer(child_name_nested[0])
-            assert isinstance(layout, LayerBoxLayout)
-            layout.add_child_layer(child_name_nested[1:], widget)
-        else:
-            self.add_layer(child_name_nested[0], widget)
-
-    def get_child_layer(self, child_name_nested):
-        assert isinstance(child_name_nested, (tuple, list))
-        if len(child_name_nested) > 1:
-            layout = self.get_layer(child_name_nested[0])
-            assert isinstance(layout, LayerBoxLayout)
-            return layout.get_child_layer(child_name_nested[1:])
-        else:
-            return self.get_layer(child_name_nested[0])
 
 class WidgetFieldElement(LayerBoxLayout):
     def __init__(self, **kwargs):
@@ -665,29 +539,30 @@ class WidgetRecycleDataView(RecycleDataViewBehavior, LayerBoxLayout):
     def refresh_view_layout(self, rv, index, layout, viewport):
         return super(WidgetRecycleDataView, self).refresh_view_layout(rv, index, layout, viewport)
 
-class SelectableRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
-                                 ActionEvent, RecycleBoxLayout):
+class SelectableRecycleBoxLayout(ActionBehavior, FocusBehavior, LayoutSelectionBehavior,
+                                 RecycleBoxLayout):
 
     ''' Adds selection and focus behaviour to the view. '''
+    pass
+    #
+    # def add_widget(self, widget, index=0):
+    #     self.action_bind(widget)
+    #     super().add_widget(widget, index)
+    #
+    # def remove_widget(self, widget):
+    #     self.action_unbind(widget)
+    #     super().remove_widget(widget)
+    #
+    # def clear_widgets(self, children=None):
+    #     if not children:
+    #         children = self.children
+    #
+    #     for child in children:
+    #         self.action_unbind(child)
+    #
+    #     super().clear_widgets(children)
 
-    def add_widget(self, widget, index=0):
-        self.action_bind(widget)
-        super().add_widget(widget, index)
-
-    def remove_widget(self, widget):
-        self.action_unbind(widget)
-        super().remove_widget(widget)
-
-    def clear_widgets(self, children=None):
-        if not children:
-            children = self.children
-
-        for child in children:
-            self.action_unbind(child)
-
-        super().clear_widgets(children)
-
-class WidgetPageContentRecycleElement(ActionEvent, RecycleView):
+class WidgetPageContentRecycleElement(ActionBehavior, RecycleView):
 
     def __init__(self, **kwargs):
         super(WidgetPageContentRecycleElement, self).__init__(**kwargs)
@@ -705,13 +580,13 @@ class WidgetPageContentRecycleElement(ActionEvent, RecycleView):
             del self.__cache[name]
             return w
 
-    def add_widget(self, widget, *largs):
-        self.action_bind(widget)
-        super(WidgetPageContentRecycleElement, self).add_widget(widget, *largs)
-
-    def remove_widget(self, widget, *largs):
-        self.action_unbind(widget)
-        super(WidgetPageContentRecycleElement, self).remove_widget(widget, *largs)
+    # def add_widget(self, widget, *largs):
+    #     self.action_bind(widget)
+    #     super(WidgetPageContentRecycleElement, self).add_widget(widget, *largs)
+    #
+    # def remove_widget(self, widget, *largs):
+    #     self.action_unbind(widget)
+    #     super(WidgetPageContentRecycleElement, self).remove_widget(widget, *largs)
 
 class WidgetPageContentBaseElement(WidgetPageContentRecycleElement):
     def __init__(self, id, row_elems, cls_kwargs, **layout_kwargs):

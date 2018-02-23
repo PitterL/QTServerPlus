@@ -244,24 +244,31 @@ class LogicDevice(Mm):
 
         if self.has_page(page_id):
             page = self.get_page(page_id)
+            page_size = page.size()
+            buf_size = page.data_length()
             buf = page.buf()
-            # page = Page(page_id, offset, len(value))
-            # page.save_to_buffer(offset, array.array('B', value))
+
             st = None
             cmd_list = []
-            for i, v in enumerate(value):
+            val = value[:page_size - offset]
+            for i, v in enumerate(val):
+                if i >= buf_size:   #buf data is not enough
+                    if st is None:
+                        st = i
+                        break
+
                 if v != buf[offset + i]:
                     if st is None:
                         st = i
                 else:
                     if st is not None:
                         cmd = ServerMessage(Message.CMD_DEVICE_PAGE_WRITE, self.id(), self.next_seq(seq),
-                            addr=page.addr() + st + offset, size=i - st, value=value[st: i], page_id=page_id)
+                            addr=page.addr() + st + offset, size=i - st, value=val[st: i], page_id=page_id)
                         cmd_list.append(cmd)    #build group command
                         st = None
             if st:  #last trunk
                 cmd = ServerMessage(Message.CMD_DEVICE_PAGE_WRITE, self.id(), self.next_seq(seq),
-                                    addr=page.addr() + st + offset, size=len(value) - st, value=value[st: ], page_id=page_id)
+                                    addr=page.addr() + st + offset, size=len(val) - st, value=val[st: ], page_id=page_id)
                 cmd_list.append(cmd)
             if cmd_list:
                 self.prepare_command(cmd_list)

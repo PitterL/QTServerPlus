@@ -1,6 +1,7 @@
 from ui.TableElement import WidgetRecycleDataView, WidgetPageContentRecycleElement
 from ui.TableElement import  WidgetRowElementBase
-from ui.TableElement import LayerBoxLayout, WidgetFieldLabelValue
+from ui.TableElement import WidgetFieldLabelValue
+from ui.WidgetExtension import LayerBoxLayout
 
 from collections import OrderedDict
 

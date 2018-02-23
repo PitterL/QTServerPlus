@@ -6,13 +6,13 @@
     do_default_tab: False
 
 <WidgetPageMultiInstElement>:
-    canvas.after:
-        Color:
-            rgba: (0.7, 1, 0.8, 0.6) if self.selected else (0.8, 0.9, 0.6, 0.6)
-        Rectangle:
-            # self here refers to the widget i.e BoxLayout
-            pos: self.pos
-            size: self.size
+    #canvas.after:
+    #    Color:
+    #        rgba: (0.4, 0.4, 0.4, 1) if self.selected else (0.2, 0.2, 0.2, 1)
+    #    Rectangle:
+    #        # self here refers to the widget i.e BoxLayout
+    #        pos: self.pos
+    #        size: self.size
     TabbedPanel:
         id: content
         tab_pos: 'right_top'
@@ -23,13 +23,17 @@
         do_default_tab: False
 
 <WidgetPageElement>:
-    canvas.after:
-        Color:
-            rgba: (0.7, 1, 0.8, 0.6) if self.selected else (0.8, 1, 0.7, 0.6)
-        Rectangle:
-            # self here refers to the widget i.e BoxLayout
-            pos: self.pos
-            size: self.size
+    #canvas.after:
+    #    Color:
+    #        rgba: (0.4, 0.4, 0.4, 1) if self.selected else (0, 0, 0, 1)
+    #    Rectangle:
+    #        # self here refers to the widget i.e BoxLayout
+    #        pos: self.pos
+    #        size: self.size
+    color: (1, 1, 1, 1)
+    #background_color: (1, 1, 1, 0.2)
+    background_normal: 'atlas://data/images/defaulttheme/action_item'
+    background_down: 'atlas://data/images/defaulttheme/action_item_down'
     WidgetPageLayout:
         id: content
         orientation:'vertical'

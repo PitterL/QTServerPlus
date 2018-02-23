@@ -13,15 +13,17 @@ from tools.mem import ChipMemoryMap
 #from ui.PageElement import PageContext, WidgetPageElement
 #from ui.PageElement import WidgetPageElement
 #from ui.PageControlBar import UpControlBar, DownControlBar, LeftControlBar, RightControlBar, CenterContentBar
+from ui.DeviceControlBar import UpControlBar, DownControlBar
 
 from ui.DebugView import DebugView
 from ui.MessageView import MessageView
+from ui.WidgetExtension import ActionBehavior
 
 class WinError(Exception):
     "Message error exception class type"
     pass
 
-class DeviceWindow(BoxLayout):
+class DeviceWindow(ActionBehavior, BoxLayout):
     CMD_STACK_DEPTH = 1000
     (UP_CONTROL_BAR, DOWN_CONTROL_BAR, LEFT_CONTROL_BAR, right_CONTROL_BAR, CENTER_CONTENT_BAR) = ("up", 'down', 'left', 'right', 'center')
 
@@ -175,16 +177,25 @@ class DeviceWindow(BoxLayout):
     def on_action(self, inst, action):
         print(self.__class__.__name__, inst, action)
         op = action.get('op')
-        if op.startswith('w'):
-            page_id = action.get('page_id')
-            page_mm = self.chip.get_mem_map_tab(page_id)
-            if page_mm:
-                value = page_mm.raw_values()
-                #value = action.get('value')
-                print(self.__class__.__name__, "on_action", "{}: Page {}".format(op, page_id))
-                kwargs = {'page_id': page_id, 'value':value}
-                command = UiMessage(Message.CMD_DEVICE_PAGE_WRITE, self.id(), self.next_seq(), **kwargs)
-                self.prepare_command(command)
+        if op:
+            if op.startswith('r') or op.startswith('w'):
+                page_id = action.get('page_id')
+                if not page_id:
+                    page_id = self._center.tab = self._center.get_current_page()
+
+                if page_id:
+                    page_mm = self.chip.get_mem_map_tab(page_id)
+                    if page_mm:
+                        value = page_mm.raw_values()
+                        #value = action.get('value')
+                        print(self.__class__.__name__, "on_action", "{}: Page {}".format(op, page_id))
+                        if op.startswith('w'):
+                            t = Message.CMD_DEVICE_PAGE_WRITE
+                        else:
+                            t = Message.CMD_DEVICE_PAGE_READ
+                        kwargs = {'page_id': page_id, 'value': value}
+                        command = UiMessage(t, self.id(), self.next_seq(), **kwargs)
+                        self.prepare_command(command)
 
     def handle_attach_msg(self, data):
         #self.prepare_command(Message(Message.CMD_POLL_DEVICE_DEVICE, self.id(), self.next_seq()))

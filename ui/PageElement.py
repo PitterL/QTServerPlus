@@ -1,21 +1,3 @@
-# from kivy.uix.gridlayout import GridLayout
-#from kivy.uix.boxlayout import BoxLayout
-#from kivy.uix.stacklayout import StackLayout
-#from kivy.uix.label import Label
-# from kivy.uix.button import Button
-#from kivy.uix.behaviors import FocusBehavior
-#from kivy.graphics import Color, Rectangle
-# from kivy.uix.textinput import TextInput
-#from kivy.uix.widget import Widget
-#from kivy.uix.scrollview import ScrollView
-
-#from kivy.uix.recycleview import RecycleView
-#from kivy.uix.recycleview.views import RecycleDataViewBehavior
-#from kivy.uix.label import Label
-#from kivy.uix.recycleboxlayout import RecycleBoxLayout
-#from kivy.uix.behaviors import FocusBehavior
-#from kivy.uix.recycleview.layout import LayoutSelectionBehavior
-
 from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem, TabbedPanelHeader
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.recycleview import RecycleView
@@ -24,7 +6,8 @@ from kivy.properties import BooleanProperty
 
 from server.devinfo import Page
 
-from ui.TableElement import WidgetPageBehavior, LayerBehavior, ActionEvent
+from ui.WidgetExtension import LayerBehavior, ActionEvent
+from ui.TableElement import WidgetPageBehavior
 from ui.TableElement import WidgetPageContentRecycleElement
 from ui.TableElement import WidgetPageContentTitleElement, WidgetPageContentDataElement
 from ui.TableElement import WidgetRowTitleElement, WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement
@@ -112,7 +95,7 @@ class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
     def on_action(self, inst, action):
         if inst is not self:
             #value = self.page_mm.raw_values()
-            self.action = dict(page_id=self.id(), **action)
+            self.action = dict(source=self.__class__.__name__, page_id=self.id(), **action)
 
 class WidgetPageMultiInstElement(ActionEvent, LayerBehavior, TabbedPanelItem):
 
@@ -257,6 +240,15 @@ class PageContext(ActionEvent, LayerBehavior, TabbedPanel):
             self.add_layer(major, widget)
 
         return widget
+
+    def get_current_page(self):
+        w = super(PageContext, self).get_current_tab()
+        if isinstance(w, WidgetPageMultiInstElement):
+            w = w._content.get_current_tab()
+
+        if isinstance(w, WidgetPageElement):
+            print(self.__class__.__name__, "get_current_page",  w.id())
+            return w.id()
 
     def switch_to_page(self, page_id):
         major, _ = page_id
