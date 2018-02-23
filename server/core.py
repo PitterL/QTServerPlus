@@ -139,7 +139,7 @@ class LogicDevice(Mm):
                                     addr=cmd_addr + data_size, value=value, page_id=cmd_page_id)
             self.prepare_command(command)
 
-    def handle_raw_data_msg(self, seq, cmd, data):
+    def handle_raw_data_msg(self, seq, data):
         message = ServerMessage(Message.MSG_DEVICE_RAW_DATA, self.id(), seq, value=data['value'])
         self.prepare_message(message)
 
@@ -147,9 +147,9 @@ class LogicDevice(Mm):
         message = ServerMessage(Message.MSG_DEVICE_INTERRUPT_DATA, self.id(), seq, value=data['value'])
         self.prepare_message(message)
 
-    def handle_nak_msg(self, seq, cmd, info=None):
-        print(self.__class__.__name__, "Send NAK message:", seq, cmd,info)
-        message = ServerMessage(Message.MSG_DEVICE_NAK, self.id(), seq, info=info)
+    def handle_nak_msg(self, seq, error=None):
+        print(self.__class__.__name__, "Send NAK message:", seq, error)
+        message = ServerMessage(Message.MSG_DEVICE_NAK, self.id(), seq, error=error)
         self.prepare_message(message)
 
     def prepare_message(self, message):
@@ -183,10 +183,10 @@ class LogicDevice(Mm):
                     elif type == Message.CMD_DEVICE_RAW_DATA:
                         self.handle_raw_data_msg(seq, cmd, msg.extra_info())
                     elif type == Message.MSG_DEVICE_NAK:
-                        self.handle_nak_msg(seq, cmd)
+                        self.handle_nak_msg(seq, error=msg)
                     else:
                         raise ServerError("Logic device id '{}' msg {} seq not match".format(id, msg))
-                        self.handle_nak_msg(seq, cmd)
+                        self.handle_nak_msg(seq, error="Unknow msg type {}".format(type))
 
                     del self.cmd_list[i]
                     break
@@ -215,7 +215,7 @@ class LogicDevice(Mm):
             cmd.send()
         #FIXME: when remove the command from list?
 
-    def handle_device_page_read(self, seq, kwargs):
+    def handle_device_page_read(self, type, seq, kwargs):
         page_id = kwargs.get('page_id')
         discard = kwargs.get('discard', True)
 
@@ -236,7 +236,7 @@ class LogicDevice(Mm):
             ServerError("Unknown page read {} requested".format(page_id))
             self.nak_command(seq)
 
-    def handle_device_page_write(self, seq, kwargs):
+    def handle_device_page_write(self,type, seq, kwargs):
         page_id = kwargs.get('page_id')
         offset = kwargs.get('offset', 0)
         value = kwargs.get('value')
@@ -272,11 +272,13 @@ class LogicDevice(Mm):
                 cmd_list.append(cmd)
             if cmd_list:
                 self.prepare_command(cmd_list)
+            else:
+                self.handle_nak_msg(seq, error="Not data changed")
         else:
             ServerError("Unknown page write {} requested".format(page_id))
             self.nak_command(seq)
 
-    def handle_device_raw_send(self, seq, kwargs):
+    def handle_device_raw_send(self, type, seq, kwargs):
         command = ServerMessage(Message.CMD_DEVICE_RAW_DATA, self.id(), self.next_seq(seq), **kwargs)
         self.prepare_command(command)
 
@@ -291,11 +293,11 @@ class LogicDevice(Mm):
         #print(self.__class__.__name__, "handle_command", msg)
 
         if type == Message.CMD_DEVICE_PAGE_READ:
-            self.handle_device_page_read(seq, msg.extra_info())
+            self.handle_device_page_read(type, seq, msg.extra_info())
         elif type == Message.CMD_DEVICE_PAGE_WRITE:
-            self.handle_device_page_write(seq, msg.extra_info())
+            self.handle_device_page_write(type, seq, msg.extra_info())
         elif type == Message.CMD_DEVICE_RAW_DATA:
-            self.handle_device_raw_send(seq, msg.extra_info())
+            self.handle_device_raw_send(type, seq, msg.extra_info())
         else:
             ServerError("cmd {} not support".format(msg))
 
@@ -403,7 +405,7 @@ class QTouchserver(object):
             for r in wait(all_pipes[:]):
                 #try:
                 msg = r.recv()
-                #print("Process<{}> get message: {}".format(self.__class__.__name__, msg))
+                print("Process<{}> get: {}".format(self.__class__.__name__, msg))
 
                 location = msg.loc()
                 if location == Message.BUS or location == Message.DEVICE:

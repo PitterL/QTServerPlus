@@ -19,7 +19,7 @@ from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 from kivy.animation import Animation
 from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem, TabbedPanelHeader
 from collections import OrderedDict
-import re
+import re, time
 
 from server.devinfo import Page
 
@@ -273,7 +273,8 @@ class WidgetFieldInputValue(ActionEvent, TextInput):
             print("Invalid input value:", text)
 
     def write(self, mode):
-        action = {'row': self.row, 'col': self.col, 'type': self.type(), 'value':self.value, 'op': mode}
+        action = {'row': self.row, 'col': self.col, 'type': self.type(), 'value':self.value,
+                  'op': mode, 'time':time.time()}
         print(self.__class__.__name__, "on_enter", action)
         self.action = action
 
@@ -543,7 +544,6 @@ class SelectableRecycleBoxLayout(ActionBehavior, FocusBehavior, LayoutSelectionB
                                  RecycleBoxLayout):
 
     ''' Adds selection and focus behaviour to the view. '''
-    pass
     #
     # def add_widget(self, widget, index=0):
     #     self.action_bind(widget)

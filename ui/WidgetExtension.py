@@ -14,13 +14,13 @@ class ActionEvent(object):
     def action_bind(self, widget):
         action = widget.property('action', True)
         if action:
-            print(self.__class__.__name__, "bind:", widget, "---", self)
+            #print(self.__class__.__name__, "bind:", widget, "---", self)
             widget.bind(action=self.on_action)
 
     def action_unbind(self, widget):
         action = widget.property('action', True)
         if action:
-            print(self.__class__.__name__, "unbind:", widget, "---", self)
+            #print(self.__class__.__name__, "unbind:", widget, "---", self)
             widget.unbind(action=self.on_action)
 
 Factory.register('ActionEvent', cls=ActionEvent)

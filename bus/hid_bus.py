@@ -435,7 +435,9 @@ class Hid_Device(PhyDevice):
             self.hid_simulated_event(None, self.HID_EVENT_SIMULATED_ID)
 
         pending = any(map(lambda c: c.is_status(Message.SEND), self.hid_cmd))
-        if not pending:
+        if pending:
+            print("{} send command pending (has {} cmd in list)".format(self.__class__.__name__, len(self.hid_cmd)))
+        else:
             for cmd in self.hid_cmd:
                 if cmd.ready():
                     cmd.send() #send 1 only each time
@@ -496,7 +498,7 @@ class Hid_Device(PhyDevice):
                         self.pipe_hid_recv.close()
                         return
 
-                    print("Process<{}> get message: {}".format(self.__class__.__name__, msg))
+                    print("Process<{}> get: {}".format(self.__class__.__name__, msg))
 
                     location = msg.loc()
                     if location == PhyMessage.HID_DEVICE:

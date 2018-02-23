@@ -13,7 +13,7 @@ from tools.mem import ChipMemoryMap
 #from ui.PageElement import PageContext, WidgetPageElement
 #from ui.PageElement import WidgetPageElement
 #from ui.PageControlBar import UpControlBar, DownControlBar, LeftControlBar, RightControlBar, CenterContentBar
-from ui.DeviceControlBar import UpControlBar, DownControlBar
+#from ui.DeviceControlBar import UpControlBar, DownControlBar
 
 from ui.DebugView import DebugView
 from ui.MessageView import MessageView
@@ -75,7 +75,9 @@ class DeviceWindow(ActionBehavior, BoxLayout):
         if len(self.cmd_list):
             busy = any([cmd.is_status(cmd.SEND) for cmd in self.cmd_list])
             #print(self.__class__.__name__,self.cmd_list, busy)
-            if not busy:
+            if busy:
+                print(self.__class__.__name__,"send_command busy", self.cmd_list)
+            else:
                 self.cmd_list[0].send_to(pipe)
 
     def process_command(self, pipe):
@@ -186,14 +188,13 @@ class DeviceWindow(ActionBehavior, BoxLayout):
                 if page_id:
                     page_mm = self.chip.get_mem_map_tab(page_id)
                     if page_mm:
-                        value = page_mm.raw_values()
-                        #value = action.get('value')
-                        print(self.__class__.__name__, "on_action", "{}: Page {}".format(op, page_id))
                         if op.startswith('w'):
                             t = Message.CMD_DEVICE_PAGE_WRITE
+                            value = page_mm.raw_values()
+                            kwargs = {'page_id': page_id, 'value': value}
                         else:
                             t = Message.CMD_DEVICE_PAGE_READ
-                        kwargs = {'page_id': page_id, 'value': value}
+                            kwargs = {'page_id': page_id}
                         command = UiMessage(t, self.id(), self.next_seq(), **kwargs)
                         self.prepare_command(command)
 

@@ -5,6 +5,7 @@ from kivy.properties import DictProperty
 from ui.PageElement import PageContext
 
 from ui.WidgetExtension import ActionEvent, ActionBehavior
+import time
 
 class ActionEventButton(ActionButton):
     def get_action(self):
@@ -12,10 +13,11 @@ class ActionEventButton(ActionButton):
 
     def on_state(self, inst, value):
         print(self.__class__.__name__, inst, value)
-        if self.parent:
-            action = self.parent.property('action', True)
-            if action:
-                self.parent.action = {'op': self.get_action()}
+        if value == 'down':
+            if self.parent:
+                action = self.parent.property('action', True)
+                if action:
+                    self.parent.action = {'op': self.get_action(), 'time':time.time()}
 
 class ActionEventView(ActionEvent, ActionView):
 
