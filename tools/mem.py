@@ -231,9 +231,10 @@ class PageElementMmap(object):
             return self.content[key]
 
     class PageDesc(object):
-        def __init__(self, row_title=None):
+        def __init__(self, row_title=None, extra_info=None):
             self.title_content = []
             self.row_content = []
+            self.extra_info = extra_info
             if row_title:
                 self.add_title(*row_title)
 
@@ -271,7 +272,7 @@ class PageElementMmap(object):
         self.__rows_mm = []
         self.__values = None
         self.value_size = 0
-        #self.title = page_desc.title()
+        self.extra_info = page_desc.extra_info
 
         for row_title_desc in page_desc.title():
             r = cls_row_elem(row_title_desc)
@@ -501,10 +502,11 @@ class PagesMemoryMap(object):
 
         for k, v in table.items():
             result = pat_name.match(k)
-            if fn_check_result(result):
+            matched, extra = fn_check_result(result)
+            if matched:
                 print("Found desc:", k)
                 title = split_row_content(v[0])
-                desc = PageElementMmap.PageDesc(title)
+                desc = PageElementMmap.PageDesc(title, extra)
                 length_row_title = get_data_elem_length(title[1])
                 for i in range(1, len(v)):
                     idx, elem = split_row_content(v[i])
@@ -543,13 +545,12 @@ class PagesMemoryMap(object):
 
     def load_page_mem_desc(self, page_id, parent_inst, size):
         def check_result(reg_id, inst_id, result):
-            if not result:
-                return
-
-            if str(reg_id) == result.group(1):
-                einfo = result.group(3)
-                if not einfo or einfo == str(inst_id):
-                    return True
+            if result:
+                if str(reg_id) == result.group(1):
+                    einfo = result.group(3)
+                    if not einfo or einfo == str(inst_id):
+                        return True, einfo
+            return False, None
 
         desc = None
         reg_id, inst_id = page_id
@@ -571,13 +572,13 @@ class PagesMemoryMap(object):
                     return info[-1]
 
         def check_result(reg_id, rrid, result):
-            if not result:
-                return
+            if result:
+                if str(reg_id) == result.group(1):
+                    einfo = get_extra_info(self.MESSAGE_EXTRA_INFO_TABLE, reg_id, rrid)
+                    if not einfo or einfo == result.group(3):
+                        return True, einfo
+            return False, None
 
-            if str(reg_id) == result.group(1):
-                einfo = get_extra_info(self.MESSAGE_EXTRA_INFO_TABLE, reg_id, rrid)
-                if not einfo or einfo == result.group(3):
-                    return True
         desc = None
         reg_id, inst_id = page_id
         if reg_id not in self.SKIP_MESSAGE_DESC:

@@ -23,7 +23,7 @@ import re, time
 
 from server.devinfo import Page
 
-from ui.WidgetExtension import ActionEvent, ActionBehavior, LayerBehavior, LayerBoxLayout
+from ui.WidgetExt import ActionEvent, ActionEventWrapper, LayerBoxLayout
 
 class ElemError(Exception):
     "Message error exception class type"
@@ -89,29 +89,19 @@ class FocusLabel(FocusWithColor, Label):
 
         return True
 
-class WidgetFieldLabelBase(Label):
-    border = ListProperty([1, 1, 1, 1])
-    """Widget border size: It must be a list of four values: (bottom, right, top, left)."""
-
-    border_color =  ListProperty([0, 0, 0, 1])
-    """Border color, in the format (r, g, b, a)."""
-    
-    background_color =  ListProperty([1, 1, 1, 1])
-    """Border color, in the format (r, g, b, a)."""
-    
+class WidgetFieldBehavior(object):
     (TYPE_NAME, TYPE_VALUE) = ('NAME', 'VALUE')
-    def __init__(self, row, col, v, max_v, t, **kwargs):
+    def __init__(self, row, col, v, t, **kwargs):
         self.row = row
         self.col = col
         self._val = v
         self._type = t
-        super(WidgetFieldLabelBase, self).__init__(text=self.covert_to_text(), **kwargs)
 
     def __str__(self):
         return "{} [{}-{}] [type {}]: {} ".format(self.__class__.__name__, self.row, self.col, self._type, self._val)
 
     def __repr__(self):
-        return super(WidgetFieldLabelBase, self).__repr__() + self.__str__()
+        return super(WidgetFieldElemBehavior, self).__repr__() + self.__str__()
 
     def type(self):
         return self._type
@@ -147,11 +137,25 @@ class WidgetFieldLabelBase(Label):
         self._val = v
         self.fresh()
 
+class WidgetFieldLabelBase(WidgetFieldBehavior, Label):
+    border = ListProperty([1, 1, 1, 1])
+    """Widget border size: It must be a list of four values: (bottom, right, top, left)."""
+
+    border_color = ListProperty([0, 0, 0, 1])
+    """Border color, in the format (r, g, b, a)."""
+
+    background_color = ListProperty([1, 1, 1, 1])
+    """Border color, in the format (r, g, b, a)."""
+
+    def __init__(self, row, col, v, t, **kwargs):
+        WidgetFieldBehavior.__init__(self, row, col, v, t)
+        Label.__init__(self, text=self.covert_to_text(), **kwargs)
+
 class WidgetFieldIndexName(WidgetFieldLabelBase):
     hightlight = BooleanProperty(False)
 
     def __init__(self, row, col, v):
-        super(WidgetFieldIndexName, self).__init__(row, col, v, None, self.TYPE_NAME)
+        super(WidgetFieldIndexName, self).__init__(row, col, v, self.TYPE_NAME)
         self._type = self.TYPE_NAME
         self.adjust_font_color()
 
@@ -161,7 +165,7 @@ class WidgetFieldIndexName(WidgetFieldLabelBase):
 
 class WidgetFieldLabelName(WidgetFieldLabelBase):
     def __init__(self, row, col, v, **kwargs):
-        super(WidgetFieldLabelName, self).__init__(row, col, v, None, self.TYPE_NAME, **kwargs)
+        super(WidgetFieldLabelName, self).__init__(row, col, v, self.TYPE_NAME, **kwargs)
         self._type = self.TYPE_NAME
 
 class WidgetFieldTitleName(WidgetFieldLabelName):
@@ -169,7 +173,8 @@ class WidgetFieldTitleName(WidgetFieldLabelName):
 
 class WidgetFieldLabelValue(WidgetFieldLabelBase):
     def __init__(self, row, col, v, max_v):
-        super(WidgetFieldLabelValue, self).__init__(row, col, v, max_v, self.TYPE_VALUE)
+        self.max_value = max_v
+        super(WidgetFieldLabelValue, self).__init__(row, col, v, self.TYPE_VALUE)
         self._type = self.TYPE_VALUE
 
 class WidgetFieldInputValue(ActionEvent, TextInput):
@@ -540,7 +545,7 @@ class WidgetRecycleDataView(RecycleDataViewBehavior, LayerBoxLayout):
     def refresh_view_layout(self, rv, index, layout, viewport):
         return super(WidgetRecycleDataView, self).refresh_view_layout(rv, index, layout, viewport)
 
-class SelectableRecycleBoxLayout(ActionBehavior, FocusBehavior, LayoutSelectionBehavior,
+class SelectableRecycleBoxLayout(ActionEventWrapper, FocusBehavior, LayoutSelectionBehavior,
                                  RecycleBoxLayout):
 
     ''' Adds selection and focus behaviour to the view. '''
@@ -562,7 +567,7 @@ class SelectableRecycleBoxLayout(ActionBehavior, FocusBehavior, LayoutSelectionB
     #
     #     super().clear_widgets(children)
 
-class WidgetPageContentRecycleElement(ActionBehavior, RecycleView):
+class WidgetPageContentRecycleElement(ActionEventWrapper, RecycleView):
 
     def __init__(self, **kwargs):
         super(WidgetPageContentRecycleElement, self).__init__(**kwargs)
@@ -619,20 +624,16 @@ class WidgetPageContentDataElement(WidgetPageContentBaseElement):
     pass
 
 
-class WidgetPageBehavior(LayerBehavior, ActionEvent):
+class WidgetPageLayout(LayerBoxLayout):
     (PAGE_CONTENT_TITLE, PAGE_CONTENT_DATA) = ('Title', 'Content')
     (W_TITLE, W_CONTENT) = range(2)
 
     selected = BooleanProperty(False)
 
-    def __init__(self, parent_widget, id, cls_kwargs):
-        super(WidgetPageBehavior, self).__init__()
-        # LayerBehavior.__init__(self)
-        # ActionEvent.__init__(self)
-        self._parent = parent_widget
+    def __init__(self, id, cls_kwargs, **layout_kwargs):
         self._id = id
         self._c_kwargs = cls_kwargs
-        #self.__layout = {}
+        super(WidgetPageLayout, self).__init__(set_minimum_height=False, **layout_kwargs)
 
     def inited(self):
         #return self.PAGE_CONTENT_DATA in self.__layout.keys()
@@ -641,37 +642,8 @@ class WidgetPageBehavior(LayerBehavior, ActionEvent):
     def id(self):
         return self._id
 
-    def selected_id(self):
-        return self.id()
-
-    def on_state(self, widget, value):
-        #print(self.__class__.__name__, "state", value)
-
-        if value == 'down':
-            self.selected = True
-        else:
-            self.selected = False
-
-    # def on_page_unselected(self, instance):
-    #     print(self.__class__.__name__, "unselected")
-    #     self.selected = False
-
-    # def parent_inst(self):
-    #     return self.__parent_inst
-
-    def add_layer(self, name, widget):
-        super(WidgetPageBehavior, self).add_layer(name, widget)
-        self.action_bind(widget)
-        self._parent.add_widget(widget)
-
-    def remove_layer(self, name):
-        w = super(WidgetPageBehavior, self).remove_layer(name)
-        if w:
-            self.action_unbind(w)
-            self._parent.remove_widget(w)
-
-    # def get_layout(self, name):
-    #     return self.__layout[name]
+    def on_size(self, inst, value):
+        print(self.__class__.__name__, inst, value)
 
     def to_tab_name(self):
         return str(self.id())
@@ -691,22 +663,9 @@ class WidgetPageBehavior(LayerBehavior, ActionEvent):
          self.add_layer(self.PAGE_CONTENT_DATA, widget)
 
     def do_fresh(self, page_mm=None):
-
-        # if not page_mm.valid():
-        #     print("{} data invalid, {}".format(page_mm.id(), page_mm))
-        #     return
-
         if self.inited():
             #FIXME: here row_mm may be same as page_mm.row()
             layout = self.get_layer(self.PAGE_CONTENT_DATA)
-            # for i, data in enumerate(layout.data):
-            #     w_row_kwargs = data.get('w_row_kwargs')
-            #     if 'row_mm' in w_row_kwargs.keys():
-            #         w_row_kwargs['row_mm'] = page_mm.row(i)
-            #     # elif 'raw_data' in w_row_kwargs.keys():
-            #     #     w_row_kwargs['row_mm'] = page_mm.row(i).get_value()
-            #     else:
-            #         print(self.__class__.__name__, "Not support value fresh: ", w_row_kwargs)
             layout.refresh_from_data()
         else:
             if page_mm:

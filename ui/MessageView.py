@@ -1,200 +1,45 @@
 from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.togglebutton import ToggleButtonBehavior, ToggleButton
-from kivy.uix.bubble import Bubble, BubbleButton
-from kivy.uix.behaviors import FocusBehavior
+from kivy.uix.layout import Layout
 from kivy.uix.label import Label
+from kivy.uix.togglebutton import ToggleButton
 
-from kivy.animation import Animation
-from kivy.properties import ObjectProperty, BooleanProperty, ListProperty, \
-    NumericProperty, StringProperty, OptionProperty, \
-    ReferenceListProperty, AliasProperty, VariableListProperty
+from ui.WidgetExt import ActionEvent, LayerActionWrapper, LayerBoxLayout
 
+class WidgetMsgCtrlButton(ActionEvent, ToggleButton):
+    def __init__(self, name):
+        super(WidgetMsgCtrlButton, self).__init__()
+        self.text = name
 
-from ui.TableElement import WidgetPageBehavior
-from ui.TableElement import WidgetRowTitleElement, WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement
-from ui.TableElement import WidgetFieldElement, WidgetFieldLabelName, WidgetFieldLabelValue
-from ui.TableElement import WidgetFieldIndexElement, WidgetFieldIndexName
+    def on_state(self, inst, value):
+        print(self.__class__.__name__, inst, value)
+        self.action = {'name':'ctrl', 'id': self.text, 'state':value}
 
-class WidgetFieldToggleName(ToggleButton):
-    def __init__(self, id , type, **kwargs):
-        self._id = id
-        self._type = type
+    def on_focus(self, inst, value):
+        print(self.__class__.__name__, inst, value)
 
-        super(WidgetFieldToggleName, self).__init__(**kwargs)
+class MessageSettingBar(LayerBoxLayout):
+    CTRL_LIST = ("Setting", "Raw")
+    def __init__(self, name):
+        super(MessageSettingBar, self).__init__()
+        for name in self.CTRL_LIST:
+            self.add_layer(name, WidgetMsgCtrlButton(name))
 
-    def __str__(self):
-        return "{} id {} type {}: {} ".format(self.__class__.__name__, self.id(), self.type(), self.text)
+class MessageContentElement(LayerActionWrapper, Label):
 
-    def id(self):
-        return self._id
+    def __init__(self):
+        super(MessageContentElement, self).__init__()
 
-    def type(self):
-        return self._type
+# class MessageView(LayerBoxLayout):
+#     def __init__(self):
+#         super(MessageView, self).__init__()
+#         self.add_layer('setting', MessageSettingBar())
+        self.add_layer('setting', MessageContentElement())
 
-    def row_idx(self):
-        return self._id[0]
-
-    def col_idx(self):
-        return self._id[1]
-
-class BubbleWidget(BoxLayout):
-    pass
-
-class WidgetBubbleElement(WidgetPageBehavior, BubbleWidget):
-    PAGE_CLS_LAYOUT_TABLE = {
-        'default': {
-            'title': {
-                'class_row_elems': (WidgetRowTitleElement, WidgetRowIndexElement, WidgetRowDataElement),
-                'class_idx_elems': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
-                'class_data_elems': (WidgetFieldElement, WidgetFieldLabelName, None)},
-            'data':{
-                'class_row_elems': (WidgetRowElement,WidgetRowIndexElement, WidgetRowDataElement),
-                'class_idx_elems': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
-                'class_data_elems': (WidgetFieldElement, WidgetFieldToggleName, None)}
-        }
-    }
-
-    @classmethod
-    def get_cls_layout_kwargs(cls, id):
-        if id in cls.PAGE_CLS_LAYOUT_TABLE.keys():
-            kwargs = cls.PAGE_CLS_LAYOUT_TABLE[id]
-        else:
-            kwargs = cls.PAGE_CLS_LAYOUT_TABLE['default']
-
-        return kwargs
-
-    def __init__(self, repo):
-        repo_id = repo.id()
-        BubbleWidget.__init__(self)
-        #w_content = self.ids['content']
-        w_content = self
-
-        cls_kwargs = self.get_cls_layout_kwargs(repo_id)
-        WidgetPageBehavior.__init__(self, w_content, repo_id, cls_kwargs)
-        #if repo.valid():
-        self.create_page_content_widget(repo)
-
-    def on_focus(self, instance, value):
-        print(instance,value)
-
-class RepoButton(FocusBehavior, ToggleButton):
-    def __init__(self, parent, repo):
-        super(RepoButton, self).__init__()
-        self._parent = parent
-        self.idx = repo.page_id[0]
-        self.text = "T" + str(self.idx)
-        self.bubb = WidgetBubbleElement(repo)
-        #self._parent.add_widget(self.bubb)
-
-    def show_bubb(self):
-        #if self._parent.hidden():
-        self._parent.add_content(self.bubb)
-
-    #def hide_bubb(self):
-    #    self._parent.clear_widgets()
-
-    def on_state(self, widget, value):
-        if value == 'down':
-            #self.hide_bubb()
-            self.show_bubb()
-
-    # def on_focus(self, instance, value):
-    #      if not value:
-    #          self.hide_bubb()
-
-class WidgetBubbleRoot(FocusBehavior, Bubble):
-    # def on_focus(self, obj, status):
-    #     print(obj, status)
-    #     if not status:
-    #          self.clear_widgets()
-
-    def hidden(self):
-        return not self.content.children
-
-    def add_content(self, w):
-        self.clear_widgets()
-        self.add_widget(w)
-
-class MessageView(FloatLayout):
-    activated = BooleanProperty(False)
-
-    #selected_command = StringProperty('')
-    #history_command = ListProperty('')
-
-    def __init__(self, win=None):
-        super(MessageView, self).__init__()
-        self._layout = {}
-        self._root = win
-
-        #bubb = WidgetBubbleRoot()
-        self._layout['bubb'] = self.ids['bubb']
-        self._layout['ctrl'] = self.ids['control']
-        self._layout['data'] = self.ids['data']
-        #self.add_widget(bubb)
-        height = self.height
-        Animation(top=height, t='out_quad', d=.3).start(self._layout['bubb'])
-        #self.add_widget(bubb)
-
-    def on_pos(self, *args):
-        print(self.__class__.__name__, args)
-
-    def sub_widget(self, name):
-        return self._layout.get(name, None)
-
-    def create_message_element(self, repo):
-        w = RepoButton(self.sub_widget('bubb'), repo)
-        #w = BubbleContentElement(repo)
-        self._layout['ctrl'].add_widget(w)
-        #self.add_widget(w)
-
-    def handle_data(self, mmsg):
-        print(mmsg)
-
-    def on_activated(self, inst, status):
-        print(self.__class__.__name__, inst, status)
-        if self._root:
-            if status:
-                self._root.add_widget(self)
-            else:
-                self._root.remove_widget(self)
-
-    def on_keyboard_down(self, keyboard, keycode, text, modifiers):
-        scancode= keycode[0]
-        # print('The key', scancode, 'have been pressed')
-        # print(' - text is %r' % text)
-        # print(' - modifiers are %r' % modifiers)
-        if scancode == 109 and modifiers == ['ctrl']:   #ctrl + m
-            print(self.__class__.__name__, self.activated)
-            self.activated = not self.activated
-            return True
-        elif scancode == 27:
-            if self.activated:
-                self.activated = False
-                return True
-        elif scancode == 13:
-            if self.activated:
-                pass
-
+from ui.PageElement import PageContext
+class MessageView(object):
     @staticmethod
-    def register_message_view(win=None):
-        from kivy.core.window import Window
-
-        if not win:
-            win = Window
-
-        view = MessageView(win=win)
-        view._keyboard = Window.request_keyboard(
-            view._keyboard_closed, view, 'text')
-        if view._keyboard.widget:
-            # If it exists, this widget is a VKeyboard object which you can, !use
-            # to change the keyboard layout.
-            pass
-        view._keyboard.bind(on_key_down=view.on_keyboard_down)
-        return view
-
-    def _keyboard_closed(self):
-        print('My keyboard have been closed!')
+    def register_message_view():
+        return PageContext()
 
 if __name__ == '__main__':
     import array, os
@@ -240,8 +85,9 @@ if __name__ == '__main__':
             for v in report_table.values():
                 repo = chip.get_msg_map_tab(v[0])
                 if repo:
-                    root.create_message_element(repo)
+                    root.create_page_element(repo)
 
             return root
+
 
     MessageViewApp().run()

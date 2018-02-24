@@ -1,0 +1,48 @@
+<WidgetFieldToggleName>:
+    canvas.before:
+        Color:
+            rgba: (0.8, 0.9, 1.0, 0.3) if self.state == 'down' else (0, 0, 0, 0)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    background_normal: 'atlas://data/images/defaulttheme/bubble_btn'
+    background_down: 'atlas://data/images/defaulttheme/bubble_btn_pressed'
+    background_disabled_normal: 'atlas://data/images/defaulttheme/bubble_btn'
+    background_disabled_down: 'atlas://data/images/defaulttheme/bubble_btn_pressed'
+    border: (0, 0, 0, 0)
+
+<WidgetBubbleElement>:
+    #height: self.minimum_height
+    #BoxLayout:
+    #    id: content
+    #    orientation:'vertical'
+    orientation:'vertical'
+
+<WidgetMsgCtrlButton>
+    size_hint: (None, None)
+    size: 60, 30
+
+<MessageCtrlBar>
+    #pos_hint: {'x':.0, 'y':1}
+    size_hint_y: None
+    cols: 12
+    #row_default_height: 5
+    #row_force_default: True
+    height: self.minimum_height
+
+<MessageSettingBar>
+    #pos_hint: {'x':.0, 'y': 1}
+    #size_hint_y: 0,8
+    arrow_pos: 'top_mid'
+
+
+<MessageContentView>:
+    orientation: 'vertical'
+
+<MessageView>
+    MessageContentView:
+        id: content
+        MessageCtrlBar:
+            id: ctrl
+        MessageSettingBar:
+            id: setting

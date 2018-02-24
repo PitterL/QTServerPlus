@@ -1,4 +1,7 @@
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.anchorlayout import AnchorLayout
 from kivy.properties import DictProperty
 from kivy.factory import Factory
 
@@ -25,28 +28,28 @@ class ActionEvent(object):
 
 Factory.register('ActionEvent', cls=ActionEvent)
 
-class ActionBehavior(ActionEvent):
+class ActionEventWrapper(ActionEvent):
     def add_widget(self, widget, *args):
         self.action_bind(widget)
-        super().add_widget(widget, *args)
+        super(ActionEventWrapper, self).add_widget(widget, *args)
 
     def remove_widget(self, widget):
         self.action_unbind(widget)
-        super().remove_widget(widget)
+        super(ActionEventWrapper, self).remove_widget(widget)
 
-    def clear_widgets(self, children=None):
-        if not children:
-            children = self.children
-
+    def clear_widgets(self, **kwargs):
+        children = kwargs.get('children', self.children)
         for child in children:
             self.action_unbind(child)
 
-        super().clear_widgets(children)
+        super(ActionEventWrapper, self).clear_widgets(**kwargs)
+
+Factory.register('ActionEventWrapper', cls=ActionEventWrapper)
 
 class LayerBehavior(object):
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.__layers = {}
-
+        super(LayerBehavior, self).__init__(**kwargs)
     # def __iter__(self):
     #     return iter(self.__layers)
     #
@@ -76,16 +79,55 @@ class LayerBehavior(object):
     # def clear_layer(self):
     #     self.__layers.clear()
 
+    def add_child_layer(self, child_name_nested, widget):
+        assert isinstance(child_name_nested, (tuple, list))
+        if len(child_name_nested) > 1:
+            layout = self.get_layer(child_name_nested[0])
+            assert isinstance(layout, LayerBehavior)
+            return layout.add_child_layer(child_name_nested[1:], widget)
+        else:
+            self.add_layer(child_name_nested[0], widget)
+            return self
+
+    def get_child_layer(self, child_name_nested):
+        assert isinstance(child_name_nested, (tuple, list))
+        if len(child_name_nested) > 1:
+            layout = self.get_layer(child_name_nested[0])
+            #assert isinstance(layout, LayerBehavior)
+            return layout.get_child_layer(child_name_nested[1:])
+        else:
+            return self.get_layer(child_name_nested[0])
+
 Factory.register('LayerBehavior', cls=LayerBehavior)
+
+class LayerActionWrapper(LayerBehavior, ActionEvent):
+    def add_layer(self, name, widget):
+        super(LayerActionWrapper, self).add_layer(name, widget)
+        super(LayerActionWrapper, self).action_bind(widget)
+        super(LayerActionWrapper, self).add_widget(widget)
+
+    def remove_layer(self, name):
+        w = super(LayerActionWrapper, self).remove_layer(name)
+        if w:
+            super(LayerActionWrapper, self).action_unbind(w)
+            super(LayerActionWrapper, self).remove_widget(w)
+
+    def clear_layer(self):
+        for layout in super(LayerActionWrapper, self).get_layers():
+            if isinstance(layout, LayerActionWrapper):
+                layout.clear_layer()
+            else:
+                super(LayerActionWrapper, self).remove_layer(layout)
+
+Factory.register('LayerActionWrapper', cls=LayerActionWrapper)
 
 class LayerBoxLayout(LayerBehavior, ActionEvent, BoxLayout):
     def __init__(self, **kwargs):
-        #super(LayerBoxLayout, self).__init__(**kwargs)  #why couldn't use this?
-        LayerBehavior.__init__(self)
-        ActionEvent.__init__(self)
-        BoxLayout.__init__(self, **kwargs)
-        self.prop_set_default_minimum_height = True
-
+        self.prop_set_default_minimum_height = kwargs.pop('set_minimum_height', True)
+        super(LayerBoxLayout, self).__init__(**kwargs)  #why couldn't use this?
+        # LayerBehavior.__init__(self)
+        # ActionEvent.__init__(self)
+        # BoxLayout.__init__(self, **kwargs)
     def set_default_minimum_height(self):
         shw, shh = self.size_hint
         if not shh:
@@ -95,9 +137,6 @@ class LayerBoxLayout(LayerBehavior, ActionEvent, BoxLayout):
                 else:
                     height = sum([child.height for child in self.children])
                 self.minimum_height = height
-
-    def get_layer(self, name):
-        return super(LayerBoxLayout, self).get_layer(name)
 
     def add_layer(self, name, widget):
         super(LayerBoxLayout, self).add_layer(name, widget)
@@ -127,22 +166,4 @@ class LayerBoxLayout(LayerBehavior, ActionEvent, BoxLayout):
             else:
                 self.remove_layer(layout)
 
-    def add_child_layer(self, child_name_nested, widget):
-        assert isinstance(child_name_nested, (tuple, list))
-        if len(child_name_nested) > 1:
-            layout = self.get_layer(child_name_nested[0])
-            assert isinstance(layout, LayerBoxLayout)
-            layout.add_child_layer(child_name_nested[1:], widget)
-        else:
-            self.add_layer(child_name_nested[0], widget)
-
-    def get_child_layer(self, child_name_nested):
-        assert isinstance(child_name_nested, (tuple, list))
-        if len(child_name_nested) > 1:
-            layout = self.get_layer(child_name_nested[0])
-            assert isinstance(layout, LayerBoxLayout)
-            return layout.get_child_layer(child_name_nested[1:])
-        else:
-            return self.get_layer(child_name_nested[0])
-
-Factory.register('LayerBoxLayout', cls=ActionEvent)
+Factory.register('LayerBoxLayout', cls=LayerBoxLayout)

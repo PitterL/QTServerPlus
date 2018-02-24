@@ -17,13 +17,13 @@ from tools.mem import ChipMemoryMap
 
 from ui.DebugView import DebugView
 from ui.MessageView import MessageView
-from ui.WidgetExtension import ActionBehavior
+from ui.WidgetExt import ActionEventWrapper
 
 class WinError(Exception):
     "Message error exception class type"
     pass
 
-class DeviceWindow(ActionBehavior, BoxLayout):
+class DeviceWindow(ActionEventWrapper, BoxLayout):
     CMD_STACK_DEPTH = 1000
     (UP_CONTROL_BAR, DOWN_CONTROL_BAR, LEFT_CONTROL_BAR, right_CONTROL_BAR, CENTER_CONTENT_BAR) = ("up", 'down', 'left', 'right', 'center')
 

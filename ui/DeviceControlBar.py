@@ -4,7 +4,7 @@ from kivy.uix.button import Button
 from kivy.properties import DictProperty
 from ui.PageElement import PageContext
 
-from ui.WidgetExtension import ActionEvent, ActionBehavior
+from ui.WidgetExt import ActionEvent, ActionEventWrapper
 import time
 
 class ActionEventButton(ActionButton):
@@ -44,7 +44,7 @@ class ActionEventView(ActionEvent, ActionView):
     def on_width(self, width, *args):
         super().on_width(width, *args)
 
-class ActionEventBar(ActionBehavior, ActionBar):
+class ActionEventBar(ActionEventWrapper, ActionBar):
     pass
 
 class UpControlBar(ActionEventBar):

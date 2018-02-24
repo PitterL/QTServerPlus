@@ -6,8 +6,8 @@ from kivy.properties import BooleanProperty
 
 from server.devinfo import Page
 
-from ui.WidgetExtension import LayerBehavior, ActionEvent
-from ui.TableElement import WidgetPageBehavior
+from ui.WidgetExt import LayerBehavior, ActionEvent, ActionEventWrapper
+from ui.TableElement import WidgetPageLayout
 from ui.TableElement import WidgetPageContentRecycleElement
 from ui.TableElement import WidgetPageContentTitleElement, WidgetPageContentDataElement
 from ui.TableElement import WidgetRowTitleElement, WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement
@@ -17,10 +17,7 @@ from ui.TableElementT1 import WidgetT1PageContentTitleElement, WidgetT1PageConte
 from ui.TableElementT1 import WidgetT1RowTitleElement, WidgetT1RowElement, WidgetT1FieldLabelValue
 from ui.TableElementT1 import WidgetFieldT1IndexName
 
-class WidgetPageLayout(BoxLayout):
-    pass
-
-class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
+class WidgetPageElement(ActionEventWrapper, TabbedPanelItem):
     PAGE_CLS_LAYOUT_TABLE = {
         Page.OBJECT_TABLE: {
             # 'title': ("type", "address", "size", "instances", "report id"),
@@ -71,18 +68,19 @@ class WidgetPageElement(WidgetPageBehavior, TabbedPanelItem):
         return kwargs
 
     def __init__(self, page_mm):
-        #self.page_mm = page_mm
         page_id = page_mm.id()
-        print(self.__class__.__name__, "init_page", page_id)
         parent_inst = page_mm.parent_inst()
+        layout_kwargs = self.get_cls_layout_kwargs(page_id)
         tab_name = self.to_tab_name(page_id, parent_inst)
-        TabbedPanelItem.__init__(self, text=tab_name)
-        w_content = self.ids['content']
 
-        widget_kwargs = self.get_cls_layout_kwargs(page_id)
-        WidgetPageBehavior.__init__(self, w_content, page_id, widget_kwargs)
+        print(self.__class__.__name__, "init_page", page_id, parent_inst, tab_name)
+        super(WidgetPageElement, self).__init__(text=tab_name)
+
+        self._content = WidgetPageLayout(page_id, layout_kwargs)
+        self.add_widget(self._content)
+
         if page_mm.valid():
-            self.create_page_content_widget(page_mm)
+            self._content.create_page_content_widget(page_mm)
 
     def to_tab_name(self, page_id, parent_inst):
         major, minor = page_id
@@ -182,9 +180,10 @@ class WidgetPageMultiInstElement(ActionEvent, LayerBehavior, TabbedPanelItem):
 
 class PageContext(ActionEvent, LayerBehavior, TabbedPanel):
     def __init__(self, **kwargs):
-        LayerBehavior.__init__(self)
-        ActionEvent.__init__(self)
-        TabbedPanel.__init__(self, **kwargs)
+        super(PageContext, self).__init__(**kwargs)
+        # LayerBehavior.__init__(self)
+        # ActionEvent.__init__(self)
+        # TabbedPanel.__init__(self, **kwargs)
         #self.__elems_tab = {}
 
     def get_element(self, elem_id):
@@ -305,7 +304,7 @@ if __name__ == '__main__':
 
             chip.create_chip_mmap_pages()
             page_mmaps = chip.get_mem_map_tab()
-            for mmap in sorted(page_mmaps.values(), key=sort_key)[4:5]:
+            for mmap in sorted(page_mmaps.values(), key=sort_key):
                 page_id = mmap.id()
                 widget = root.get_element(page_id)
                 if not widget:
