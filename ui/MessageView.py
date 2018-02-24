@@ -2,8 +2,17 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.layout import Layout
 from kivy.uix.label import Label
 from kivy.uix.togglebutton import ToggleButton
+from kivy.uix.tabbedpanel import TabbedPanelItem
 
 from ui.WidgetExt import ActionEvent, LayerActionWrapper, LayerBoxLayout
+
+from ui.WidgetExt import LayerBehavior, ActionEvent, ActionEventWrapper
+from ui.TableElement import WidgetPageLayout
+from ui.TableElement import WidgetPageContentRecycleElement
+from ui.TableElement import WidgetPageContentTitleElement, WidgetPageContentDataElement
+from ui.TableElement import WidgetRowTitleElement, WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement
+from ui.TableElement import WidgetFieldElement, WidgetFieldLabelName, WidgetFieldLabelValue, WidgetFieldInputValue
+from ui.TableElement import WidgetFieldIndexElement, WidgetFieldIndexName, WidgetFieldTitleName
 
 class WidgetMsgCtrlButton(ActionEvent, ToggleButton):
     def __init__(self, name):
@@ -35,11 +44,84 @@ class MessageContentElement(LayerActionWrapper, Label):
 #         self.add_layer('setting', MessageSettingBar())
         self.add_layer('setting', MessageContentElement())
 
-from ui.PageElement import PageContext
-class MessageView(object):
+from ui.PageElement import PageContext, WidgetPageMultiInstElement, WidgetPageElement, WidgetPageLayout
+class WidgetRepoElement(ActionEventWrapper, TabbedPanelItem):
+    PAGE_CLS_LAYOUT_TABLE = {
+        'default': {
+            'title': {
+                'class_content': WidgetPageContentTitleElement,
+                'class_row_elems': (WidgetRowTitleElement, WidgetRowIndexElement, WidgetRowDataElement),
+                'class_idx_field': (WidgetFieldIndexElement, WidgetFieldTitleName, None),
+                'class_data_field': (WidgetFieldElement, WidgetFieldTitleName, None)},
+            'data': {
+                'class_content': WidgetPageContentDataElement,
+                'class_row_elems': (WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement),
+                'class_idx_field': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
+                'class_data_field': (WidgetFieldElement, WidgetFieldLabelName, None)}
+        }
+    }
+
+    @classmethod
+    def get_cls_layout_kwargs(cls, id):
+        if id in cls.PAGE_CLS_LAYOUT_TABLE.keys():
+            kwargs = cls.PAGE_CLS_LAYOUT_TABLE[id]
+        else:
+            kwargs = cls.PAGE_CLS_LAYOUT_TABLE['default']
+
+        return kwargs
+
+    def __init__(self, repo_mm):
+        repo_id = repo_mm.id()
+        repo_range = repo_mm.report_range()
+        einfo = repo_mm.extra_info()
+        layout_kwargs = self.get_cls_layout_kwargs(repo_id)
+        tab_name = self.to_tab_name(repo_id, repo_range, einfo)
+
+        print(self.__class__.__name__, "init_repo", repo_id, repo_range, tab_name)
+        super(WidgetRepoElement, self).__init__(text=tab_name)
+
+        self._content = WidgetPageLayout(repo_id, layout_kwargs)
+        self.add_widget(self._content)
+
+        #if page_mm.valid():
+        self._content.create_page_content_widget(repo_mm)
+
+    def to_tab_name(self, repo_id, repo_range, einfo):
+        if einfo:
+            return str(repo_id)
+        else:
+            st, end = repo_range
+            if st != end:
+                name = "{}-{}".format(st, end)
+            else:
+                name = "{}".format(st)
+            return name
+
+class MessageView(PageContext):
     @staticmethod
     def register_message_view():
-        return PageContext()
+        return MessageView()
+
+    def create_repo_element(self, repo_mm):
+        report_id = repo_mm.id()
+        repo_range = repo_mm.report_range()
+        page_id = repo_mm.page_id()
+        print(self.__class__.__name__, "create repo element", page_id, report_id, repo_range)
+        st, end = repo_range
+        major, _ = page_id
+        num_reports = end - st + 1
+        if num_reports > 1:
+            parent_widget = self.get_element(major)
+            if not parent_widget:
+                parent_widget = WidgetPageMultiInstElement(major, repo_range)
+                self.add_layer(major, parent_widget)
+            widget = WidgetRepoElement(repo_mm)
+            parent_widget.add_page(report_id, widget)
+        else:
+            widget = WidgetRepoElement(repo_mm)
+            self.add_layer('R'+ str(report_id), widget)
+
+        return widget
 
 if __name__ == '__main__':
     import array, os
@@ -81,12 +163,20 @@ if __name__ == '__main__':
             page_mmap.set_values(v_block_info)
             chip.create_chip_mmap_pages()
             #root.create_page_element(page_mmap)
-            report_table = chip.get_reg_reporer()
-            for v in report_table.values():
-                repo = chip.get_msg_map_tab(v[0])
-                if repo:
-                    root.create_page_element(repo)
 
+            report_table = chip.get_reg_reporer()
+            for page_id, repo_range in report_table.items():
+                major, minor = page_id
+                st, end = repo_range
+                if major == 100:
+                    print('aaa')
+                if minor == 0:  #only need inst 0 report list
+                    for repo_id in range(st, end + 1):
+                        repo_mm = chip.get_msg_map_tab(repo_id)
+                        if repo_mm:
+                            einfo = repo_mm.extra_info()
+                            if st == repo_id or einfo:
+                                root.create_repo_element(repo_mm)
             return root
 
 

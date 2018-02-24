@@ -272,7 +272,7 @@ class PageElementMmap(object):
         self.__rows_mm = []
         self.__values = None
         self.value_size = 0
-        self.extra_info = page_desc.extra_info
+        self._extra_info = page_desc.extra_info
 
         for row_title_desc in page_desc.title():
             r = cls_row_elem(row_title_desc)
@@ -310,6 +310,9 @@ class PageElementMmap(object):
 
     def parent_inst(self):
          return -1
+
+    def extra_info(self):
+        return self._extra_info
 
     def valid(self):
         return self.__values is not None
@@ -443,9 +446,20 @@ class Page2Mem(PageElementMmap):
 
 class PageMessageMap(PageElementMmap):
 
-    def __init__(self, page_id, report_id, desc):
+    def __init__(self, page_id, parent_inst, report_id, report_range, desc):
         super(PageMessageMap, self).__init__(report_id, desc, None, RowElement)
-        self.page_id = page_id
+        self._page_id = page_id
+        self._parent_inst = parent_inst
+        self._report_range = report_range
+
+    def page_id(self):
+        return self._page_id
+
+    def parent_inst(self):
+        return self._parent_inst
+
+    def report_range(self):
+        return self._report_range
 
 class PagesMemoryMap(object):
     PATTERN_CONFIG_TABLE_NAME = re.compile("Configuration for [A-Z_]+(\d+)( Instance (\d))?")
@@ -640,8 +654,8 @@ class PagesMemoryMap(object):
                 element = ObjectTableElement(*struct.unpack_from("<BHBBB", data[n * esize: (n + 1) * esize]))
                 inst = element.instances_minus_one + 1
                 num_repo = element.num_report_ids
-                if num_repo:
-                    page1_mmap.set_reg_reporter(element.type, range(repo_st, repo_st + num_repo * inst))
+                # if num_repo:
+                #     page1_mmap.set_reg_reporter(element.type, (repo_st, repo_st + num_repo * inst - 1))
                 for i in range(inst):
                     page_id = (element.type, i)
                     size = element.size_minus_one + 1
@@ -649,12 +663,14 @@ class PagesMemoryMap(object):
                     mmem = Page2Mem(page_id, inst, desc)
                     self.set_mem_map(mmem)
                     if num_repo:
+                        inst_repo_range = (repo_st, repo_st + num_repo - 1)
+                        page1_mmap.set_reg_reporter(page_id, inst_repo_range)
                         msg_reg = self.get_mem_map_tab((5, 0))
                         for j in range(num_repo):
                             desc = self.load_page_msg_desc(page_id, j, len(msg_reg))
-                            mmsg = PageMessageMap(page_id, repo_st, desc)
+                            mmsg = PageMessageMap(page_id, inst, repo_st + j, inst_repo_range, desc)
                             self.set_msg_map(mmsg)
-                            repo_st += 1
+                        repo_st += num_repo
 
 class ChipMemoryMap(object):
     CHIP_TABLE = {}

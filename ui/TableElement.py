@@ -306,6 +306,7 @@ class WidgetFieldInputValue(ActionEvent, TextInput):
         self.padding[0] = self._get_padding_left(self.text)
 
 class WidgetFieldElement(LayerBoxLayout):
+    NAMES_EXCLUSION = ('TBD','User data', '')
     def __init__(self, **kwargs):
         #print(self.__class__.__name__, kwargs)
         self.row =  kwargs.get('row_idx')
@@ -319,8 +320,9 @@ class WidgetFieldElement(LayerBoxLayout):
         super(WidgetFieldElement, self).__init__(**layout_kwargs)
 
         if cls_field_name:
-            w = cls_field_name(self.row, self.col, name)
-            self.add_layer(w.type(), w)
+            if name not in self.NAMES_EXCLUSION:
+                w = cls_field_name(self.row, self.col, name)
+                self.add_layer(w.type(), w)
 
         if cls_field_value:
             w = cls_field_value(self.row, self.col, value, max_value)
@@ -474,6 +476,17 @@ class WidgetRowElement(WidgetRowElementBase):
                 w_field = self.create_field_element(**kwargs)
                 self.add_child_layer([self.CHILD_ELEM_DATA, name], w_field)
 
+        #self.uniform_height()
+
+    def uniform_height(self):
+        row_data = self.get_layer(self.CHILD_ELEM_DATA)
+        row_idx = self.get_layer(self.CHILD_ELEM_INDEX)
+        if row_data and row_idx:
+            for _, elem in row_idx:
+                for _, w in elem:
+                    row_data.bind(minimum_height=w.setter('height'))
+                    w.height = row_data.minimum_height
+
     def do_fresh(self, **kwargs):
         row_elem = kwargs.get('row_elem')
         for j, (name, field) in enumerate(row_elem):
@@ -481,7 +494,7 @@ class WidgetRowElement(WidgetRowElementBase):
             if layout:
                 layout.set_value(field.value)
 
-    def update_cache(self, **kwargs):
+    def writeback_cache(self, **kwargs):
         col = kwargs['col']
         val = kwargs['value']
         for j, (name, field) in enumerate(self.row_elem):
@@ -492,7 +505,7 @@ class WidgetRowElement(WidgetRowElementBase):
     def on_action(self, inst, action):
         if inst != self:
             op = action.get('op')
-            self.update_cache(**action)
+            self.writeback_cache(**action)
             if op == 'wt':  #only write through will report to hight layer
                 self.action = action
 

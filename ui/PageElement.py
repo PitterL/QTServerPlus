@@ -100,14 +100,14 @@ class WidgetPageMultiInstElement(ActionEvent, LayerBehavior, TabbedPanelItem):
     selected = BooleanProperty(False)
 
     def __init__(self, major, insts, **kwargs):
-        #super(WidgetPageMultiInstElement, self).__init__(text=str(major), **kwargs)
         self.major = major
         self.insts = insts
+        super(WidgetPageMultiInstElement, self).__init__(text=str(major), **kwargs)
         #self.__pages_tab = {}
 
-        ActionEvent.__init__(self)
-        LayerBehavior.__init__(self)
-        TabbedPanelItem.__init__(self, text=str(major), **kwargs)
+        # ActionEvent.__init__(self)
+        # LayerBehavior.__init__(self)
+        # TabbedPanelItem.__init__(self, text=str(major), **kwargs)
 
         self._content = self.ids['content']
         #print(self.__class__.__name__, "init", self)
@@ -188,7 +188,7 @@ class PageContext(ActionEvent, LayerBehavior, TabbedPanel):
 
     def get_element(self, elem_id):
         if isinstance(elem_id, tuple):
-            major, inst = elem_id
+            major, _ = elem_id
         else:
             major = elem_id
 

@@ -50,11 +50,12 @@ class LayerBehavior(object):
     def __init__(self, **kwargs):
         self.__layers = {}
         super(LayerBehavior, self).__init__(**kwargs)
-    # def __iter__(self):
-    #     return iter(self.__layers)
-    #
-    # def __len__(self):
-    #     return len(self.__layers)
+
+    def __iter__(self):
+        return iter(self.__layers.items())
+
+    def __len__(self):
+        return len(self.__layers)
 
     def get_layer_names(self):
         return tuple(self.__layers.keys())
