@@ -123,15 +123,19 @@ class DeviceWindow(ActionEventWrapper, BoxLayout):
 
         self.chip.create_chip_mmap_pages()
         page_mmaps = self.chip.get_mem_map_tab()
+        # first_page_id = None
         for mmap in sorted(page_mmaps.values(), key=sort_key):
             page_id = mmap.id()
+            # if not first_page_id:
+            #     first_page_id = page_id
             widget = self.get_element(page_id)
             if not widget:
                 self.create_page_element(page_id)
                 #print(self.__class__.__name__, "create_page_element", widget)
 
         #self._center.switch_to_page(Page.ID_INFORMATION)
-        Clock.schedule_once(lambda dt: self._center.switch_to_page(Page.ID_INFORMATION))
+        #self._center.set_default_page()
+        #Clock.schedule_once(lambda dt: self._center.switch_to_page(first_page_id))
 
     def distory_page_element(self):
         self.clear_elements()
@@ -183,7 +187,8 @@ class DeviceWindow(ActionEventWrapper, BoxLayout):
             if op.startswith('r') or op.startswith('w'):
                 page_id = action.get('page_id')
                 if not page_id:
-                    page_id = self._center.tab = self._center.get_current_page()
+                    #page_id = self._center.tab = self._center.get_current_page_id()
+                    page_id = self._center.get_current_page_id()
 
                 if page_id:
                     page_mm = self.chip.get_mem_map_tab(page_id)

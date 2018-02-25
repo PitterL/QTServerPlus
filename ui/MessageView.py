@@ -2,10 +2,9 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.layout import Layout
 from kivy.uix.label import Label
 from kivy.uix.togglebutton import ToggleButton
-from kivy.uix.tabbedpanel import TabbedPanelItem
+from kivy.uix.tabbedpanel import TabbedPanelHeader, TabbedPanelItem
 
 from ui.WidgetExt import ActionEvent, LayerActionWrapper, LayerBoxLayout
-
 from ui.WidgetExt import LayerBehavior, ActionEvent, ActionEventWrapper
 from ui.TableElement import WidgetPageLayout
 from ui.TableElement import WidgetPageContentRecycleElement
@@ -13,6 +12,7 @@ from ui.TableElement import WidgetPageContentTitleElement, WidgetPageContentData
 from ui.TableElement import WidgetRowTitleElement, WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement
 from ui.TableElement import WidgetFieldElement, WidgetFieldLabelName, WidgetFieldLabelValue, WidgetFieldInputValue
 from ui.TableElement import WidgetFieldIndexElement, WidgetFieldIndexName, WidgetFieldTitleName
+from ui.PageElement import WidgetPageMultiInstElement
 
 class WidgetMsgCtrlButton(ActionEvent, ToggleButton):
     def __init__(self, name):
@@ -97,6 +97,20 @@ class WidgetRepoElement(ActionEventWrapper, TabbedPanelItem):
                 name = "{}".format(st)
             return name
 
+
+class WidgetRepoMultiInstElement(WidgetPageMultiInstElement):
+    def switch_tab(self):
+        tab = self._content.get_current_tab()
+        if isinstance(tab, TabbedPanelHeader):
+            page_id = (self.major, 0)
+            print(self.__class__.__name__, "on_page_selected", self.major, ",switch to first instance ")
+            w = self.get_page(page_id)
+            if w:
+                self._content.switch_to(w)
+                w.dispatch('on_press')
+                # tab = self._content.get_current_tab()
+                # tab.dispatch('on_press')
+
 class MessageView(PageContext):
     @staticmethod
     def register_message_view():
@@ -168,8 +182,6 @@ if __name__ == '__main__':
             for page_id, repo_range in report_table.items():
                 major, minor = page_id
                 st, end = repo_range
-                if major == 100:
-                    print('aaa')
                 if minor == 0:  #only need inst 0 report list
                     for repo_id in range(st, end + 1):
                         repo_mm = chip.get_msg_map_tab(repo_id)

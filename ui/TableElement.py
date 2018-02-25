@@ -319,10 +319,10 @@ class WidgetFieldElement(LayerBoxLayout):
         layout_kwargs = kwargs.get('layout_kwargs', dict())
         super(WidgetFieldElement, self).__init__(**layout_kwargs)
 
-        if cls_field_name:
-            if name not in self.NAMES_EXCLUSION:
-                w = cls_field_name(self.row, self.col, name)
-                self.add_layer(w.type(), w)
+        cls_field = self.inspect_cls(cls_field_name, self.row, self.col, name)
+        if cls_field:
+            w = cls_field(self.row, self.col, name)
+            self.add_layer(w.type(), w)
 
         if cls_field_value:
             w = cls_field_value(self.row, self.col, value, max_value)
@@ -349,6 +349,18 @@ class WidgetFieldElement(LayerBoxLayout):
             if child.is_type_name():
                 child.set_value(name)
                 break
+
+    def inspect_cls(self, cls_field, row, col, v):
+        if cls_field:
+            if not isinstance(cls_field, (tuple, list)):    #simple structure
+                return cls_field
+            else:
+                cls_name, param = cls_field
+                exclusion = param.get('exclusion')
+                if exclusion:
+                    if v in exclusion:
+                        return None
+                return cls_name
 
 class WidgetFieldIndexElement(WidgetFieldElement):
     def __init__(self, **kwargs):
@@ -476,16 +488,18 @@ class WidgetRowElement(WidgetRowElementBase):
                 w_field = self.create_field_element(**kwargs)
                 self.add_child_layer([self.CHILD_ELEM_DATA, name], w_field)
 
-        #self.uniform_height()
+        self.uniform_idx_height_to_data_row(row_id)
 
-    def uniform_height(self):
-        row_data = self.get_layer(self.CHILD_ELEM_DATA)
-        row_idx = self.get_layer(self.CHILD_ELEM_INDEX)
-        if row_data and row_idx:
-            for _, elem in row_idx:
-                for _, w in elem:
-                    row_data.bind(minimum_height=w.setter('height'))
-                    w.height = row_data.minimum_height
+    def uniform_idx_height_to_data_row(self, row_id):
+        elem_data_row = self.get_layer(self.CHILD_ELEM_DATA)
+        elem_idx_row = self.get_layer(self.CHILD_ELEM_INDEX)
+        if elem_data_row and elem_idx_row:
+            for _, layout in elem_idx_row:
+                for _, elem in layout:
+                    if elem_data_row.minimum_height:
+                        #print(self.__class__.__name__, "set height", row_id, elem, elem_data_row.minimum_height)
+                        elem.height = elem_data_row.minimum_height
+                        elem_data_row.bind(minimum_height=elem.setter('height'))
 
     def do_fresh(self, **kwargs):
         row_elem = kwargs.get('row_elem')
@@ -655,8 +669,8 @@ class WidgetPageLayout(LayerBoxLayout):
     def id(self):
         return self._id
 
-    def on_size(self, inst, value):
-        print(self.__class__.__name__, inst, value)
+    # def on_size(self, inst, value):
+    #     print(self.__class__.__name__, inst, value)
 
     def to_tab_name(self):
         return str(self.id())

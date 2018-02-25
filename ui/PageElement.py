@@ -54,7 +54,9 @@ class WidgetPageElement(ActionEventWrapper, TabbedPanelItem):
                 'class_content': WidgetPageContentDataElement,
                 'class_row_elems': (WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement),
                 'class_idx_field': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
-                'class_data_field': (WidgetFieldElement, WidgetFieldLabelName, WidgetFieldInputValue)}
+                'class_data_field': (WidgetFieldElement,
+                                        (WidgetFieldLabelName, {'exclusion':('TBD','User data', '')}),
+                                        WidgetFieldInputValue)}
         }
     }
 
@@ -133,21 +135,34 @@ class WidgetPageMultiInstElement(ActionEvent, LayerBehavior, TabbedPanelItem):
         #print(self.__class__.__name__, "state", value)
         if value == 'down':
             self.selected = True
-            self.switch_tab()
+            self.switch_page_tab()
         else:
             self.selected = False
+    #
+    # def set_default_page(self):
+    #     if len(self._content.tab_list) == 1:
+    #         self._content._switch_to_first_tab()
 
-    def switch_tab(self):
+    def switch_page_tab(self, retry=True):
         tab = self._content.get_current_tab()
-        if isinstance(tab, TabbedPanelHeader):
-            page_id = (self.major, 0)
-            print(self.__class__.__name__, "on_page_selected", self.major, ",switch to first instance ")
-            w = self.get_page(page_id)
-            if w:
-                self._content.switch_to(w)
-                w.dispatch('on_press')
-                # tab = self._content.get_current_tab()
-                # tab.dispatch('on_press')
+        assert isinstance(tab, TabbedPanelHeader)
+        if tab.content:
+            tab.dispatch('on_press')
+        else:
+            if retry:
+                self._content._switch_to_first_tab()
+                self.switch_tab(False)
+
+        #if tab.content:
+            #tab.content.dispatch('on_press')
+        # page_id = (self.major, 0)
+        # print(self.__class__.__name__, "on_page_selected", self.major, ",switch to first instance ")
+        # w = self.get_page(page_id)
+        # if w:
+        #     self._content.switch_to(w)
+        #     w.dispatch('on_press')
+        #     # tab = self._content.get_current_tab()
+        #     # tab.dispatch('on_press')
 
     def get_page(self, page_id):
         #return self.__pages_tab.get(page_id, None)
@@ -158,6 +173,8 @@ class WidgetPageMultiInstElement(ActionEvent, LayerBehavior, TabbedPanelItem):
         super(WidgetPageMultiInstElement, self).add_layer(page_id, w_page)
         super(WidgetPageMultiInstElement, self).action_bind(w_page)
         self._content.add_widget(w_page)
+        if len(self) == 1:
+            self._content._switch_to_first_tab()
 
     def remove_page(self, page_id):
         w = self.remove_layer(page_id)
@@ -205,6 +222,8 @@ class PageContext(ActionEvent, LayerBehavior, TabbedPanel):
         super(PageContext, self).add_layer(major, w_page)
         super(PageContext, self).action_bind(w_page)
         self.add_widget(w_page)
+        if len(self) == 1:
+            self._switch_to_first_tab()
 
     def remove_layer(self, major):
         w = super(PageContext, self).get_layer(major)
@@ -240,22 +259,29 @@ class PageContext(ActionEvent, LayerBehavior, TabbedPanel):
 
         return widget
 
-    def get_current_page(self):
+    def get_current_page_id(self):
         w = super(PageContext, self).get_current_tab()
         if isinstance(w, WidgetPageMultiInstElement):
             w = w._content.get_current_tab()
 
         if isinstance(w, WidgetPageElement):
-            print(self.__class__.__name__, "get_current_page",  w.id())
+            print(self.__class__.__name__, "get_current_page_id",  w.id())
             return w.id()
 
-    def switch_to_page(self, page_id):
-        major, _ = page_id
-        w = super(PageContext, self).get_layer(major)
-        if w:
-            self.switch_to(w)
-            #tab = self.get_current_tab()
-            w.dispatch('on_press')
+    # def set_default_page(self):
+    #     if len(self.tab_list) == 1:
+    #         self._switch_to_first_tab()
+    # def set_default_page(self, tab):
+    #     tab = self.get_current_tab():
+    #         self.switch_to(tab)
+
+    # def switch_to_page(self, page_id):
+    #     major, _ = page_id
+    #     w = super(PageContext, self).get_layer(major)
+    #     if w:
+    #         self.switch_to(w)
+    #         #tab = self.get_current_tab()
+    #         w.dispatch('on_press')
 
 if __name__ == '__main__':
 
