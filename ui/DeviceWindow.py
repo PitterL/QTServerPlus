@@ -135,7 +135,7 @@ class DeviceWindow(ActionEventWrapper, BoxLayout):
 
         #self._center.switch_to_page(Page.ID_INFORMATION)
         #self._center.set_default_page()
-        #Clock.schedule_once(lambda dt: self._center.switch_to_page(first_page_id))
+        Clock.schedule_once(lambda dt: self._center.switch_tab())
 
     def distory_page_element(self):
         self.clear_elements()
@@ -170,7 +170,7 @@ class DeviceWindow(ActionEventWrapper, BoxLayout):
     def on_page_selected(self, instance):
         print(self.__class__.__name__, "on_page_selected", instance)
 
-        page_id = instance.selected_id()
+        page_id = instance.id()
         page_mm = self.chip.get_mem_map_tab(page_id)
         if not page_mm:
             return
@@ -344,7 +344,8 @@ if __name__ == '__main__':
                 Message('local', Message.MSG_DEVICE_PAGE_READ, Page.OBJECT_TABLE, root.next_seq(),
                         value=mm.get_page(Page.OBJECT_TABLE))]
     #page x
-    page_id_list = [(7,0), (6,0), (37,0),(8,0), (15,0), (15, 1)]
+    page_id_list = [(7,0), (6,0), (37,0),(38, 0), (8,0), (15,0), (15, 1), (100, 0)]
+    #page_id_list = []
     for page_id in page_id_list:
         page_cache = mm.get_page(page_id)
         cache = array.array('B', range(page_cache.length))

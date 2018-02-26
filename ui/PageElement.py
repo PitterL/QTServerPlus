@@ -1,10 +1,8 @@
+from kivy.clock import Clock
 from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem, TabbedPanelHeader
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.recycleview import RecycleView
-from collections import OrderedDict
 from kivy.properties import BooleanProperty
-
-from server.devinfo import Page
 
 from ui.WidgetExt import LayerBehavior, ActionEvent, ActionEventWrapper
 from ui.TableElement import WidgetPageLayout
@@ -16,6 +14,9 @@ from ui.TableElement import WidgetFieldIndexElement, WidgetFieldIndexName, Widge
 from ui.TableElementT1 import WidgetT1PageContentTitleElement, WidgetT1PageContentDataElement
 from ui.TableElementT1 import WidgetT1RowTitleElement, WidgetT1RowElement, WidgetT1FieldLabelValue
 from ui.TableElementT1 import WidgetFieldT1IndexName
+
+from server.devinfo import Page
+from collections import OrderedDict
 
 class WidgetPageElement(ActionEventWrapper, TabbedPanelItem):
     PAGE_CLS_LAYOUT_TABLE = {
@@ -70,7 +71,7 @@ class WidgetPageElement(ActionEventWrapper, TabbedPanelItem):
         return kwargs
 
     def __init__(self, page_mm):
-        page_id = page_mm.id()
+        page_id = self._page_id = page_mm.id()
         parent_inst = page_mm.parent_inst()
         layout_kwargs = self.get_cls_layout_kwargs(page_id)
         tab_name = self.to_tab_name(page_id, parent_inst)
@@ -84,6 +85,15 @@ class WidgetPageElement(ActionEventWrapper, TabbedPanelItem):
         if page_mm.valid():
             self._content.create_page_content_widget(page_mm)
 
+    def __str__(self):
+        return super(WidgetPageElement, self).__str__() + "[id{}] ".format(self.id())
+
+    def id(self):
+        return self._page_id
+
+    # def selected_id(self):
+    #     return self.id()
+
     def to_tab_name(self, page_id, parent_inst):
         major, minor = page_id
         if parent_inst > 1:
@@ -91,6 +101,12 @@ class WidgetPageElement(ActionEventWrapper, TabbedPanelItem):
         else:
             name = "{}".format(major)
         return name
+
+    def do_fresh(self, page_mm=None):
+        self._content.do_fresh(page_mm)
+
+    # def on_state(self, widget, value):
+    #     print(self.__class__.__name__, "state", value)
 
     def on_action(self, inst, action):
         if inst is not self:
@@ -135,7 +151,7 @@ class WidgetPageMultiInstElement(ActionEvent, LayerBehavior, TabbedPanelItem):
         #print(self.__class__.__name__, "state", value)
         if value == 'down':
             self.selected = True
-            self.switch_page_tab()
+            self.switch_tab()
         else:
             self.selected = False
     #
@@ -143,15 +159,16 @@ class WidgetPageMultiInstElement(ActionEvent, LayerBehavior, TabbedPanelItem):
     #     if len(self._content.tab_list) == 1:
     #         self._content._switch_to_first_tab()
 
-    def switch_page_tab(self, retry=True):
+    def switch_tab(self, level=1):
         tab = self._content.get_current_tab()
         assert isinstance(tab, TabbedPanelHeader)
         if tab.content:
-            tab.dispatch('on_press')
+            tab.dispatch('on_release')
         else:
-            if retry:
+            if level > 0:
+                level -= 1
                 self._content._switch_to_first_tab()
-                self.switch_tab(False)
+                self.switch_tab(level)
 
         #if tab.content:
             #tab.content.dispatch('on_press')
@@ -173,8 +190,6 @@ class WidgetPageMultiInstElement(ActionEvent, LayerBehavior, TabbedPanelItem):
         super(WidgetPageMultiInstElement, self).add_layer(page_id, w_page)
         super(WidgetPageMultiInstElement, self).action_bind(w_page)
         self._content.add_widget(w_page)
-        if len(self) == 1:
-            self._content._switch_to_first_tab()
 
     def remove_page(self, page_id):
         w = self.remove_layer(page_id)
@@ -222,8 +237,6 @@ class PageContext(ActionEvent, LayerBehavior, TabbedPanel):
         super(PageContext, self).add_layer(major, w_page)
         super(PageContext, self).action_bind(w_page)
         self.add_widget(w_page)
-        if len(self) == 1:
-            self._switch_to_first_tab()
 
     def remove_layer(self, major):
         w = super(PageContext, self).get_layer(major)
@@ -268,7 +281,19 @@ class PageContext(ActionEvent, LayerBehavior, TabbedPanel):
             print(self.__class__.__name__, "get_current_page_id",  w.id())
             return w.id()
 
-    # def set_default_page(self):
+    def switch_tab(self, level=1):
+        tab = self.get_current_tab()
+        assert isinstance(tab, TabbedPanelHeader)
+        if tab.content:
+            tab.dispatch('on_release')
+        else:
+            if level > 0:
+                level -= 1
+                self._switch_to_first_tab()
+                self.switch_tab(level)
+
+
+                        # def set_default_page(self):
     #     if len(self.tab_list) == 1:
     #         self._switch_to_first_tab()
     # def set_default_page(self, tab):
@@ -338,8 +363,9 @@ if __name__ == '__main__':
                         value = array.array('B', range(mmap.get_value_size()))
                         mmap.set_values(value)
                     widget = root.create_page_element(mmap)
-                    #widget.do_fresh(mmap)
+                    widget.do_fresh(mmap)
 
+            Clock.schedule_once(lambda dt: root.switch_tab())
             return root
 
     PageElementApp().run()

@@ -18,12 +18,14 @@ from kivy.uix.behaviors import FocusBehavior
 from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 from kivy.animation import Animation
 from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem, TabbedPanelHeader
+from kivy.clock import Clock
+
+from server.devinfo import Page
+from ui.WidgetExt import ActionEvent, ActionEventWrapper, LayerBoxLayout, LayerBoxLayoutBase
+
 from collections import OrderedDict
 import re, time
 
-from server.devinfo import Page
-
-from ui.WidgetExt import ActionEvent, ActionEventWrapper, LayerBoxLayout
 
 class ElemError(Exception):
     "Message error exception class type"
@@ -101,7 +103,7 @@ class WidgetFieldBehavior(object):
         return "{} [{}-{}] [type {}]: {} ".format(self.__class__.__name__, self.row, self.col, self._type, self._val)
 
     def __repr__(self):
-        return super(WidgetFieldElemBehavior, self).__repr__() + self.__str__()
+        return super(WidgetFieldBehavior, self).__repr__() + self.__str__()
 
     def type(self):
         return self._type
@@ -150,6 +152,9 @@ class WidgetFieldLabelBase(WidgetFieldBehavior, Label):
     def __init__(self, row, col, v, t, **kwargs):
         WidgetFieldBehavior.__init__(self, row, col, v, t)
         Label.__init__(self, text=self.covert_to_text(), **kwargs)
+
+    # def on_size(self, *args):
+    #     print(self.__class__.__name__, args)
 
 class WidgetFieldIndexName(WidgetFieldLabelBase):
     hightlight = BooleanProperty(False)
@@ -296,7 +301,10 @@ class WidgetFieldInputValue(ActionEvent, TextInput):
             self.set_error('v')
 
     def on_focus(self, instance, value):
-        if not value:
+        print(self.__class__.__name__, instance, "on_focus", value)
+        if value:
+            Clock.schedule_once(lambda dt: self.select_all())
+        else:
             self.on_text_validate(False)
 
     def on_text(self, inst, text):
@@ -469,16 +477,18 @@ class WidgetRowElement(WidgetRowElementBase):
         # idx content
         if cls_row_idx:
             if row_elem.idx_desc:
-                self.add_layer(self.CHILD_ELEM_INDEX, cls_row_idx())
+                #self.add_layer(self.CHILD_ELEM_INDEX, cls_row_idx())
+                parent = cls_row_idx()
                 for j, desc in enumerate(row_elem.idx_desc):
                     if desc:
                         name, _= desc
                         w_field = self.create_field_element(col_idx=j, name=name, cls_kwargs=cls_idx_field)
-                        self.add_child_layer([self.CHILD_ELEM_INDEX, name], w_field)
-
+                        #self.add_child_layer([self.CHILD_ELEM_INDEX, name], w_field)
+                        parent.add_layer(name, w_field)
+                self.add_layer(self.CHILD_ELEM_INDEX,parent)
         # data content
         if cls_row_data:
-            self.add_layer(self.CHILD_ELEM_DATA, cls_row_data())
+            parent = cls_row_data()
             line_space = sum(map(lambda v: v.width, row_elem.field_values()))
             for j, (name, field) in enumerate(row_elem):   #row_elem is RowElement, iter() is {name: BitField}
                 percent = field.width / line_space
@@ -486,7 +496,9 @@ class WidgetRowElement(WidgetRowElementBase):
                 kwargs = dict(col_idx=j, name=name, value=field.value, max_value=field.max_value,
                               layout_kwargs=layout_kwargs, cls_kwargs=cls_data_field)
                 w_field = self.create_field_element(**kwargs)
-                self.add_child_layer([self.CHILD_ELEM_DATA, name], w_field)
+                #self.add_child_layer([self.CHILD_ELEM_DATA, name], w_field)
+                parent.add_layer(name, w_field)
+            self.add_layer(self.CHILD_ELEM_DATA, parent)
 
         self.uniform_idx_height_to_data_row(row_id)
 
@@ -497,9 +509,9 @@ class WidgetRowElement(WidgetRowElementBase):
             for _, layout in elem_idx_row:
                 for _, elem in layout:
                     if elem_data_row.minimum_height:
-                        #print(self.__class__.__name__, "set height", row_id, elem, elem_data_row.minimum_height)
                         elem.height = elem_data_row.minimum_height
                         elem_data_row.bind(minimum_height=elem.setter('height'))
+                        #print(self.__class__.__name__, "uniform height [Row {}] height {} {}".format(row_id, elem.height, elem))
 
     def do_fresh(self, **kwargs):
         row_elem = kwargs.get('row_elem')
@@ -539,7 +551,7 @@ class WidgetRecycleDataView(RecycleDataViewBehavior, LayerBoxLayout):
 
     """cache each item"""
     def refresh_view_attrs(self, rv, index, data):
-        #print(self.__class__.__name__, index, kwargs)
+        #print(self.__class__.__name__, index, data)
         kwargs = data['view_attrs']
 
         v_kwargs = kwargs.get('view_kwargs')
@@ -566,16 +578,29 @@ class WidgetRecycleDataView(RecycleDataViewBehavior, LayerBoxLayout):
 
             self.add_layer(wid, w)
 
+        data.update(height=w.height)
         self.index = index
         return super(WidgetRecycleDataView, self).refresh_view_attrs(rv, index, data)
 
     def refresh_view_layout(self, rv, index, layout, viewport):
+        layer = self.first_layer()
+        #layout.update(size = layer.minimum_size)
+        size = layout.get('size')
+        if not size or size[1] != layer.height:
+            print(self.__class__.__name__, "[IDX {}] height mismatch {} {}, refresh data", index, layer.size, layer.minimum_size)
+            #self.refresh_from_data()
+            rv.refresh_from_data()
         return super(WidgetRecycleDataView, self).refresh_view_layout(rv, index, layout, viewport)
 
 class SelectableRecycleBoxLayout(ActionEventWrapper, FocusBehavior, LayoutSelectionBehavior,
                                  RecycleBoxLayout):
 
     ''' Adds selection and focus behaviour to the view. '''
+    # def on_size(self, *args):
+    #     print(self.__class__.__name__, args)
+
+    # def compute_visible_views(self, data, viewport):
+    #     return super().compute_visible_views(data, viewport)
     #
     # def add_widget(self, widget, index=0):
     #     self.action_bind(widget)
@@ -651,7 +676,7 @@ class WidgetPageContentDataElement(WidgetPageContentBaseElement):
     pass
 
 
-class WidgetPageLayout(LayerBoxLayout):
+class WidgetPageLayout(LayerBoxLayoutBase):
     (PAGE_CONTENT_TITLE, PAGE_CONTENT_DATA) = ('Title', 'Content')
     (W_TITLE, W_CONTENT) = range(2)
 
@@ -660,7 +685,7 @@ class WidgetPageLayout(LayerBoxLayout):
     def __init__(self, id, cls_kwargs, **layout_kwargs):
         self._id = id
         self._c_kwargs = cls_kwargs
-        super(WidgetPageLayout, self).__init__(set_minimum_height=False, **layout_kwargs)
+        super(WidgetPageLayout, self).__init__(**layout_kwargs)
 
     def inited(self):
         #return self.PAGE_CONTENT_DATA in self.__layout.keys()
@@ -693,6 +718,7 @@ class WidgetPageLayout(LayerBoxLayout):
         if self.inited():
             #FIXME: here row_mm may be same as page_mm.row()
             layout = self.get_layer(self.PAGE_CONTENT_DATA)
+            #default_size
             layout.refresh_from_data()
         else:
             if page_mm:

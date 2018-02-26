@@ -1,3 +1,4 @@
+from kivy.clock import Clock
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.layout import Layout
 from kivy.uix.label import Label
@@ -13,6 +14,8 @@ from ui.TableElement import WidgetRowTitleElement, WidgetRowElement, WidgetRowIn
 from ui.TableElement import WidgetFieldElement, WidgetFieldLabelName, WidgetFieldLabelValue, WidgetFieldInputValue
 from ui.TableElement import WidgetFieldIndexElement, WidgetFieldIndexName, WidgetFieldTitleName
 from ui.PageElement import WidgetPageMultiInstElement
+
+from collections import OrderedDict
 
 class WidgetMsgCtrlButton(ActionEvent, ToggleButton):
     def __init__(self, name):
@@ -71,13 +74,15 @@ class WidgetRepoElement(ActionEventWrapper, TabbedPanelItem):
         return kwargs
 
     def __init__(self, repo_mm):
+        self.repo_tab = OrderedDict()
         repo_id = repo_mm.id()
         repo_range = repo_mm.report_range()
         einfo = repo_mm.extra_info()
         layout_kwargs = self.get_cls_layout_kwargs(repo_id)
-        tab_name = self.to_tab_name(repo_id, repo_range, einfo)
+        #tab_name = self.to_tab_name(repo_id, repo_range, einfo)
 
-        print(self.__class__.__name__, "init_repo", repo_id, repo_range, tab_name)
+        tab_name = str(repo_id)
+        print(self.__class__.__name__, "init_repo [repo {}{}] tab {}".format(repo_id, repo_range, tab_name))
         super(WidgetRepoElement, self).__init__(text=tab_name)
 
         self._content = WidgetPageLayout(repo_id, layout_kwargs)
@@ -86,17 +91,33 @@ class WidgetRepoElement(ActionEventWrapper, TabbedPanelItem):
         #if page_mm.valid():
         self._content.create_page_content_widget(repo_mm)
 
-    def to_tab_name(self, repo_id, repo_range, einfo):
-        if einfo:
-            return str(repo_id)
-        else:
-            st, end = repo_range
-            if st != end:
-                name = "{}-{}".format(st, end)
-            else:
-                name = "{}".format(st)
-            return name
+        self.add_repo(repo_mm)
 
+    def add_repo(self, new_repo_mm):
+        repo_id = new_repo_mm.id()
+        if not self.repo_tab:
+            self.repo_tab[repo_id] = new_repo_mm
+        else:
+            ids = list(self.repo_tab.keys())
+            rid = ids[-1]   #last one in table
+            rmm = self.repo_tab[rid]
+            if repo_id == rid + 1 and new_repo_mm.extra_info() == rmm.extra_info():
+                self.repo_tab[repo_id] = new_repo_mm
+
+        if repo_id in self.repo_tab.keys():
+            self.text = self.to_tab_name()
+            return repo_id
+
+    def to_tab_name(self):
+        ids = list(self.repo_tab.keys())
+        st = ids[0]
+        end = ids[-1]
+
+        if st != end:
+            name = "{}-{}".format(st, end)
+        else:
+            name = "{}".format(st)
+        return name
 
 class WidgetRepoMultiInstElement(WidgetPageMultiInstElement):
     def switch_tab(self):
@@ -116,26 +137,61 @@ class MessageView(PageContext):
     def register_message_view():
         return MessageView()
 
-    def create_repo_element(self, repo_mm):
-        report_id = repo_mm.id()
-        repo_range = repo_mm.report_range()
-        page_id = repo_mm.page_id()
-        print(self.__class__.__name__, "create repo element", page_id, report_id, repo_range)
-        st, end = repo_range
-        major, _ = page_id
-        num_reports = end - st + 1
-        if num_reports > 1:
-            parent_widget = self.get_element(major)
+    def create_repo_element(self, repo_insts):
+        assert repo_insts
+
+        for repo_mm in repo_insts:
+            repo_id = repo_mm.id()
+            repo_range = repo_mm.report_range()
+            page_id = repo_mm.page_id()
+            print(self.__class__.__name__, "create repo element [page {}] [repo {}{}]".format(page_id, repo_id, repo_range))
+            st, end = repo_range
+            major, _ = page_id
+
+            parent_widget = self.get_layer(major)
             if not parent_widget:
                 parent_widget = WidgetPageMultiInstElement(major, repo_range)
                 self.add_layer(major, parent_widget)
-            widget = WidgetRepoElement(repo_mm)
-            parent_widget.add_page(report_id, widget)
-        else:
-            widget = WidgetRepoElement(repo_mm)
-            self.add_layer('R'+ str(report_id), widget)
 
-        return widget
+            w_repo = parent_widget.last_layer()
+            if not w_repo:
+                w_repo = WidgetRepoElement(repo_mm)
+                parent_widget.add_page(repo_id, w_repo)
+            else:
+                result = w_repo.add_repo(repo_mm)
+                if not result:
+                    w_repo = WidgetRepoElement(repo_mm)
+                    parent_widget.add_page(repo_id, w_repo)
+
+        return w_repo
+        #
+        # if len(repo_insts) == 1:
+        #     widget = WidgetRepoElement(major, repo_mm)
+        #     self.add_layer(major, widget)
+        # else:
+        #     parent_widget = self.get_element(major)
+        #     if not parent_widget:
+        #         parent_widget = WidgetPageMultiInstElement(major, repo_range)
+        #         self.add_layer(major, parent_widget)
+        #
+        #
+        #
+        # report_id = repo_mm.id()
+        # repo_range = repo_mm.report_range()
+        # page_id = repo_mm.page_id()
+        # print(self.__class__.__name__, "create repo element", page_id, report_id, repo_range)
+        # st, end = repo_range
+        # major, _ = page_id
+        # num_reports = end - st + 1
+        # if num_reports > 1:
+        #     parent_widget = self.get_element(major)
+        #     if not parent_widget:
+        #         parent_widget = WidgetPageMultiInstElement(major, repo_range)
+        #         self.add_layer(major, parent_widget)
+        #     widget = WidgetRepoElement(report_id, repo_mm)
+        #     parent_widget.add_page(report_id, widget)
+        # else:
+        # return widget
 
 if __name__ == '__main__':
     import array, os
@@ -178,17 +234,28 @@ if __name__ == '__main__':
             chip.create_chip_mmap_pages()
             #root.create_page_element(page_mmap)
 
+            def sort_key(repo):
+                (major, minor), (st, end) = repo
+                if isinstance(major, str):
+                    result = (ord(major) - ord('z') - 1, inst)
+                else:
+                    result = (major, minor, st, end)
+
+                #print("sort_key", result)
+                return result
+
             report_table = chip.get_reg_reporer()
-            for page_id, repo_range in report_table.items():
+            for page_id, repo_range in sorted(report_table.items(), key=sort_key):
                 major, minor = page_id
                 st, end = repo_range
                 if minor == 0:  #only need inst 0 report list
+                    repo_insts = []
                     for repo_id in range(st, end + 1):
                         repo_mm = chip.get_msg_map_tab(repo_id)
                         if repo_mm:
-                            einfo = repo_mm.extra_info()
-                            if st == repo_id or einfo:
-                                root.create_repo_element(repo_mm)
+                            repo_insts.append(repo_mm)
+                    root.create_repo_element(repo_insts)
+            Clock.schedule_once(lambda dt: root.switch_tab())
             return root
 
 

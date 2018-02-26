@@ -2,8 +2,10 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.anchorlayout import AnchorLayout
-from kivy.properties import DictProperty
+from kivy.properties import DictProperty, BooleanProperty
 from kivy.factory import Factory
+
+from collections import OrderedDict
 
 class ActionEvent(object):
     action = DictProperty({})
@@ -48,7 +50,7 @@ Factory.register('ActionEventWrapper', cls=ActionEventWrapper)
 
 class LayerBehavior(object):
     def __init__(self, **kwargs):
-        self.__layers = {}
+        self.__layers = OrderedDict()
         super(LayerBehavior, self).__init__(**kwargs)
 
     def __iter__(self):
@@ -56,6 +58,22 @@ class LayerBehavior(object):
 
     def __len__(self):
         return len(self.__layers)
+
+    def keys(self):
+        return self.__layers.keys()
+
+    def values(self):
+        return self.__layers.values()
+
+    def first_layer(self):
+        keys = self.__layers.keys()
+        if keys:
+            return self.__layers[list(keys)[0]]
+
+    def last_layer(self):
+        keys  = self.__layers.keys()
+        if keys:
+            return self.__layers[list(keys)[-1]]
 
     def get_layer_names(self):
         return tuple(self.__layers.keys())
@@ -122,49 +140,54 @@ class LayerActionWrapper(LayerBehavior, ActionEvent):
 
 Factory.register('LayerActionWrapper', cls=LayerActionWrapper)
 
-class LayerBoxLayout(LayerBehavior, ActionEvent, BoxLayout):
+class LayerBoxLayoutBase(LayerBehavior, ActionEvent, BoxLayout):
+
     def __init__(self, **kwargs):
-        self.prop_set_default_minimum_height = kwargs.pop('set_minimum_height', True)
-        super(LayerBoxLayout, self).__init__(**kwargs)  #why couldn't use this?
-        # LayerBehavior.__init__(self)
-        # ActionEvent.__init__(self)
-        # BoxLayout.__init__(self, **kwargs)
+        #self.prop_set_default_minimum_height = kwargs.pop('set_minimum_height', True)
+        super(LayerBoxLayoutBase, self).__init__(**kwargs)  #why couldn't use this?
+
+    def add_layer(self, name, widget):
+        super(LayerBoxLayoutBase, self).add_layer(name, widget)
+        self.action_bind(widget)
+        self.add_widget(widget)
+
+    def remove_layer(self, name):
+        if name in super(LayerBoxLayoutBase, self).get_layer_names():
+            w = super(LayerBoxLayoutBase, self).get_layer(name)
+            self.action_unbind(w)
+            self.remove_widget(w)
+            super(LayerBoxLayoutBase, self).remove_layer(name)
+
+    def detach_layer(self):
+        for n in super(LayerBoxLayoutBase, self).get_layer_names():
+            self.remove_layer(n)
+
+    def clear_layer(self):
+        for layout in super(LayerBoxLayoutBase, self).get_layers():
+            if isinstance(layout, LayerBoxLayoutBase):
+                layout.clear_layer()
+            else:
+                self.remove_layer(layout)
+
+class LayerBoxLayout(LayerBoxLayoutBase):
+    set_minimum_height = BooleanProperty(True)
+
     def set_default_minimum_height(self):
         shw, shh = self.size_hint
         if not shh:
             if self.children:
                 if self.orientation == 'horizontal':
-                    height = self.children[0].height
+                    height = self.children[-1].height
                 else:
                     height = sum([child.height for child in self.children])
-                self.minimum_height = height
+                #print(self.__class__.__name__, "set default height", self.height, self.minimum_height, height)
+                self.height = self.minimum_height = height
+        #self.height = self.minimum_height
 
-    def add_layer(self, name, widget):
-        super(LayerBoxLayout, self).add_layer(name, widget)
-        self.action_bind(widget)
-        self.add_widget(widget)
-
+    def on_children(self, *args):
         # RecycleView has some bug for fresh height = self.minimum_height, we should adjust it may manually
         # so we should as the order, all children are created first, then added to parent widget
-        if self.prop_set_default_minimum_height:
+        if self.set_minimum_height:
             self.set_default_minimum_height()
-
-    def remove_layer(self, name):
-        if name in super(LayerBoxLayout, self).get_layer_names():
-            w = super(LayerBoxLayout, self).get_layer(name)
-            self.action_unbind(w)
-            self.remove_widget(w)
-            super(LayerBoxLayout, self).remove_layer(name)
-
-    def detach_layer(self):
-        for n in super(LayerBoxLayout, self).get_layer_names():
-            self.remove_layer(n)
-
-    def clear_layer(self):
-        for layout in super(LayerBoxLayout, self).get_layers():
-            if isinstance(layout, LayerBoxLayout):
-                layout.clear_layer()
-            else:
-                self.remove_layer(layout)
 
 Factory.register('LayerBoxLayout', cls=LayerBoxLayout)
