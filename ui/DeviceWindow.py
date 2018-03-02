@@ -17,7 +17,7 @@ from tools.mem import ChipMemoryMap
 
 from ui.DebugView import DebugView
 from ui.MessageView import MessageView
-from ui.WidgetExt import ActionEventWrapper
+from ui.WidgetExt import Action, ActionEventWrapper
 
 class WinError(Exception):
     "Message error exception class type"
@@ -180,28 +180,30 @@ class DeviceWindow(ActionEventWrapper, BoxLayout):
             command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
             self.prepare_command(command)
 
-    def on_action(self, inst, action):
-        print(self.__class__.__name__, inst, action)
-        op = action.get('op')
-        if op:
-            if op.startswith('r') or op.startswith('w'):
-                page_id = action.get('page_id')
-                if not page_id:
-                    #page_id = self._center.tab = self._center.get_current_page_id()
-                    page_id = self._center.get_current_page_id()
+    def on_action(self, inst, act):
+        print(self.__class__.__name__, inst, act)
 
-                if page_id:
-                    page_mm = self.chip.get_mem_map_tab(page_id)
-                    if page_mm:
-                        if op.startswith('w'):
-                            t = Message.CMD_DEVICE_PAGE_WRITE
-                            value = page_mm.raw_values()
-                            kwargs = {'page_id': page_id, 'value': value}
-                        else:
-                            t = Message.CMD_DEVICE_PAGE_READ
-                            kwargs = {'page_id': page_id}
-                        command = UiMessage(t, self.id(), self.next_seq(), **kwargs)
-                        self.prepare_command(command)
+        action = Action.parse(act)
+        if action.is_event('value'):
+            page_id = action.get('page_id')
+            if not page_id:
+                #page_id = self._center.tab = self._center.get_current_page_id()
+                page_id = self._center.get_current_page_id()
+
+            if page_id:
+                page_mm = self.chip.get_mem_map_tab(page_id)
+                if page_mm:
+                    if action.is_op('w'):
+                        t = Message.CMD_DEVICE_PAGE_WRITE
+                        value = page_mm.raw_values()
+                        kwargs = {'page_id': page_id, 'value': value}
+                    else:
+                        t = Message.CMD_DEVICE_PAGE_READ
+                        kwargs = {'page_id': page_id}
+                    command = UiMessage(t, self.id(), self.next_seq(), **kwargs)
+                    self.prepare_command(command)
+        elif action.is_event('prop'):
+            pass
 
     def handle_attach_msg(self, data):
         #self.prepare_command(Message(Message.CMD_POLL_DEVICE_DEVICE, self.id(), self.next_seq()))

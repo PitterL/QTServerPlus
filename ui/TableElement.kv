@@ -34,28 +34,6 @@
     border_color: 0, 0, 0, 1
     border: (0.5, 0.5, 0.5, 0.5)
 
-<WidgetFieldLabelValue>
-
-<WidgetFieldInputValue>
-    size_hint_y: None
-    height: DEFAULT_LABLE_SIZE
-    font_name: "font/ARIALN.ttf"
-    font_size: '15sp'
-    bold: False
-    foreground_color: (0, 0, 0, 1)
-    background_color: (1, 1, 1, 1)
-    cursor_color: (0, 0, 0, 1)
-    cursor_blink: True
-    border: (1, 1, 1, 1)
-    background_normal: self.pg_normal
-    background_active: self.pg_active
-    multiline: False
-    write_tab: False
-    #use_handles: False
-    pg_error: "image/background_error.png"
-    pg_active: "image/background_active.png"
-    pg_normal: "image/background_border.png"
-
 <WidgetFieldLabelName>
     font_name: "font/ARIALNB.ttf"
 
@@ -77,6 +55,57 @@
     background_color: 0, 0, 0, 1
     border_color: 1, 1, 1, 1
     border: (0.5, 0.5, 0.5, 0.5)
+
+<WidgetFieldButtonName>
+    halign: 'center'
+    valign: 'middle'
+    size_hint_y: None
+    height: DEFAULT_LABLE_SIZE
+    font_name: "font/ARIALN.ttf"
+    font_size: '15sp'
+    bold: False
+    color: 0, 0, 0, 0.7
+    background_color: 1, 1, 1, 1
+    #border: (12, 12, 12, 12)
+    background_normal: self.pg_normal
+    background_down: self.pg_active
+    pg_error: "image/background_error.png"
+    pg_active: "image/background_down.png"
+    pg_normal: "image/background_border.png"
+
+<WidgetFieldIndexButtonName>
+    #height: DEFAULT_LABLE_SIZE
+    font_name: "arial.ttf"
+    font_size: '12sp'
+    shorten: False
+    shorten_from: 'right'
+    color: (0, 0.65, 1, 1) if self.state == 'normal' else (0, 0, 0, 0.7)
+    disabled_color: 0, 0, 0, 0.7
+    text_size: self.width, None
+    background_disabled_normal: self.background_normal
+    background_disabled_down: self.background_normal
+
+<WidgetFieldLabelValue>
+
+<WidgetFieldInputValue>
+    size_hint_y: None
+    height: DEFAULT_LABLE_SIZE
+    font_name: "font/ARIALN.ttf"
+    font_size: '15sp'
+    bold: False
+    foreground_color: (0, 0, 0, 1)
+    background_color: (1, 1, 1, 1)
+    cursor_color: (0, 0, 0, 1)
+    cursor_blink: True
+    border: (1, 1, 1, 1)
+    background_normal: self.pg_normal
+    background_active: self.pg_active
+    multiline: False
+    write_tab: False
+    #use_handles: False
+    pg_error: "image/background_error.png"
+    pg_active: "image/background_active.png"
+    pg_normal: "image/background_border.png"
 
 <WidgetFieldElement>
     orientation:'vertical'

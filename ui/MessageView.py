@@ -5,15 +5,16 @@ from kivy.uix.label import Label
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.tabbedpanel import TabbedPanelHeader, TabbedPanelItem
 
-from ui.WidgetExt import ActionEvent, LayerActionWrapper, LayerBoxLayout
+from ui.WidgetExt import PropAction, ActionEvent, LayerActionWrapper, LayerBoxLayout
 from ui.WidgetExt import LayerBehavior, ActionEvent, ActionEventWrapper
 from ui.TableElement import WidgetPageLayout
 from ui.TableElement import WidgetPageContentRecycleElement
 from ui.TableElement import WidgetPageContentTitleElement, WidgetPageContentDataElement
 from ui.TableElement import WidgetRowTitleElement, WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement
-from ui.TableElement import WidgetFieldElement, WidgetFieldLabelName, WidgetFieldLabelValue, WidgetFieldInputValue
-from ui.TableElement import WidgetFieldIndexElement, WidgetFieldIndexName, WidgetFieldTitleName
+from ui.TableElement import WidgetFieldElement, WidgetFieldLabelName, WidgetFieldButtonName, WidgetFieldLabelValue, WidgetFieldInputValue
+from ui.TableElement import WidgetFieldIndexElement, WidgetFieldIndexName, WidgetFieldIndexButtonName, WidgetFieldTitleName
 from ui.PageElement import WidgetPageMultiInstElement
+from ui.PageElement import PageContext, WidgetPageMultiInstElement, WidgetPageElement, WidgetPageLayout
 
 from collections import OrderedDict
 
@@ -22,9 +23,13 @@ class WidgetMsgCtrlButton(ActionEvent, ToggleButton):
         super(WidgetMsgCtrlButton, self).__init__()
         self.text = name
 
+    def write(self):
+        action = PropAction(name='ctrl', id=self.text, state=value)
+        self.action = action
+
     def on_state(self, inst, value):
         print(self.__class__.__name__, inst, value)
-        self.action = {'name':'ctrl', 'id': self.text, 'state':value}
+        #self.action = {'name':'ctrl', 'id': self.text, 'state':value}
 
     def on_focus(self, inst, value):
         print(self.__class__.__name__, inst, value)
@@ -47,7 +52,6 @@ class MessageContentElement(LayerActionWrapper, Label):
 #         self.add_layer('setting', MessageSettingBar())
         self.add_layer('setting', MessageContentElement())
 
-from ui.PageElement import PageContext, WidgetPageMultiInstElement, WidgetPageElement, WidgetPageLayout
 class WidgetRepoElement(ActionEventWrapper, TabbedPanelItem):
     PAGE_CLS_LAYOUT_TABLE = {
         'default': {
@@ -59,8 +63,8 @@ class WidgetRepoElement(ActionEventWrapper, TabbedPanelItem):
             'data': {
                 'class_content': WidgetPageContentDataElement,
                 'class_row_elems': (WidgetRowElement, WidgetRowIndexElement, WidgetRowDataElement),
-                'class_idx_field': (WidgetFieldIndexElement, WidgetFieldIndexName, None),
-                'class_data_field': (WidgetFieldElement, WidgetFieldLabelName, None)}
+                'class_idx_field': (WidgetFieldIndexElement, WidgetFieldIndexButtonName, None),
+                'class_data_field': (WidgetFieldElement, WidgetFieldButtonName, None)}
         }
     }
 

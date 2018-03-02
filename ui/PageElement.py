@@ -4,7 +4,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.recycleview import RecycleView
 from kivy.properties import BooleanProperty
 
-from ui.WidgetExt import LayerBehavior, ActionEvent, ActionEventWrapper
+from ui.WidgetExt import Action, ActionEvent, ActionEventWrapper,LayerBehavior
 from ui.TableElement import WidgetPageLayout
 from ui.TableElement import WidgetPageContentRecycleElement
 from ui.TableElement import WidgetPageContentTitleElement, WidgetPageContentDataElement
@@ -108,10 +108,10 @@ class WidgetPageElement(ActionEventWrapper, TabbedPanelItem):
     # def on_state(self, widget, value):
     #     print(self.__class__.__name__, "state", value)
 
-    def on_action(self, inst, action):
+    def on_action(self, inst, act):
         if inst is not self:
-            #value = self.page_mm.raw_values()
-            self.action = dict(source=self.__class__.__name__, page_id=self.id(), **action)
+            action = Action.parse(act)
+            self.action = action.set(page_id=self.id())
 
 class WidgetPageMultiInstElement(ActionEvent, LayerBehavior, TabbedPanelItem):
 
@@ -355,7 +355,7 @@ if __name__ == '__main__':
 
             chip.create_chip_mmap_pages()
             page_mmaps = chip.get_mem_map_tab()
-            for mmap in sorted(page_mmaps.values(), key=sort_key):
+            for mmap in sorted(page_mmaps.values(), key=sort_key)[4:5]:
                 page_id = mmap.id()
                 widget = root.get_element(page_id)
                 if not widget:

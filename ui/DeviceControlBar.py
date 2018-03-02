@@ -5,7 +5,7 @@ from kivy.properties import DictProperty
 from kivy.clock import Clock
 
 from ui.PageElement import PageContext
-from ui.WidgetExt import ActionEvent, ActionEventWrapper
+from ui.WidgetExt import Action, ValueAction, ActionEvent, ActionEventWrapper
 
 from functools import partial
 #import time
@@ -16,7 +16,8 @@ class ActionEventButton(ActionButton):
 
     def set_action(self, dt):
         assert self.parent.property('action', True)
-        self.parent.action = {'op': self.get_op(), 'time': dt}
+        action = ValueAction(op=self.get_op(), time=dt)
+        self.parent.action = action
 
     def on_state(self, inst, value):
         print(self.__class__.__name__, inst, value)
@@ -64,9 +65,11 @@ class ActionEventBar(ActionEventWrapper, ActionBar):
     pass
 
 class UpControlBar(ActionEventBar):
-    def on_action(self, inst, action):
+    def on_action(self, inst, act):
         if inst != self:
-            self.action = dict(source=self.__class__.__name__, **action)
+            action = Action.parse(act)
+            #self.action = dict(source=self.__class__.__name__, **action)
+            self.action =action.set(source=self.__class__.__name__)
 
 class DownControlBar(ActionEventBar):
     pass

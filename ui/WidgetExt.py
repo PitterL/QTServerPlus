@@ -7,6 +7,41 @@ from kivy.factory import Factory
 
 from collections import OrderedDict
 
+class Action(dict):
+    def is_event(self, name):
+        e = self.get('event')
+        if e:
+            return e == name
+
+    def is_op(self, name):
+        def check_op(op, name):
+            if isinstance(name, (tuple, list)):
+                for n in name:
+                    result = check_op(op, n)
+                    if result:
+                        return
+            else:
+                return op.startswith(name)
+
+        op = self.get('op')
+        if op:
+            return check_op(op, name)
+
+    @staticmethod
+    def parse(action, **kwargs):
+        return Action(**action, **kwargs)
+
+    def set(self, **kwargs):
+        return Action(**self)
+
+class ValueAction(Action):
+    def __init__(self, **kwargs):
+        super(ValueAction, self).__init__(event='value', **kwargs)
+
+class PropAction(Action):
+    def __init__(self, **kwargs):
+        super(PropAction, self).__init__(event='prop', **kwargs)
+
 class ActionEvent(object):
     action = DictProperty({})
 

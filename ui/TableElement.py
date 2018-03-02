@@ -8,6 +8,7 @@ from kivy.graphics import Color, Rectangle
 from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
 #from kivy.uix.scrollview import ScrollView
+from kivy.uix.togglebutton import ToggleButton
 
 from kivy.uix.recycleview import RecycleView
 from kivy.uix.recycleview.views import RecycleDataAdapter
@@ -21,7 +22,7 @@ from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem, TabbedPanelHeader
 from kivy.clock import Clock
 
 from server.devinfo import Page
-from ui.WidgetExt import ActionEvent, ActionEventWrapper, LayerBoxLayout, LayerBoxLayoutBase
+from ui.WidgetExt import Action, ValueAction, PropAction, ActionEvent, ActionEventWrapper, LayerBoxLayout, LayerBoxLayoutBase
 
 from collections import OrderedDict
 import re, time
@@ -92,7 +93,7 @@ class FocusLabel(FocusWithColor, Label):
         return True
 
 class WidgetFieldBehavior(object):
-    (TYPE_NAME, TYPE_VALUE) = ('NAME', 'VALUE')
+    #(TYPE_NAME, TYPE_VALUE) = ('NAME', 'VALUE')
     def __init__(self, row, col, v, t, **kwargs):
         self.row = row
         self.col = col
@@ -109,10 +110,10 @@ class WidgetFieldBehavior(object):
         return self._type
 
     def is_type_name(self):
-        return self.TYPE_NAME == self._type
+        return self._type == WidgetFieldElement.TYPE_NAME
 
     def is_type_value(self):
-        return self.TYPE_VALUE == self._type
+        return self._type == WidgetFieldElement.TYPE_VALUE
 
     def to_field_name(self, name):
         return name
@@ -134,6 +135,9 @@ class WidgetFieldBehavior(object):
 
     def fresh(self):
         self.text = self.covert_to_text()
+
+    def get_value(self):
+        return self._val
 
     def set_value(self, v):
         self._val = v
@@ -160,8 +164,8 @@ class WidgetFieldIndexName(WidgetFieldLabelBase):
     hightlight = BooleanProperty(False)
 
     def __init__(self, row, col, v):
-        super(WidgetFieldIndexName, self).__init__(row, col, v, self.TYPE_NAME)
-        self._type = self.TYPE_NAME
+        super(WidgetFieldIndexName, self).__init__(row, col, v, WidgetFieldElement.TYPE_NAME)
+        #self._type = self.TYPE_NAME
         self.adjust_font_color()
 
     def adjust_font_color(self):
@@ -170,20 +174,57 @@ class WidgetFieldIndexName(WidgetFieldLabelBase):
 
 class WidgetFieldLabelName(WidgetFieldLabelBase):
     def __init__(self, row, col, v, **kwargs):
-        super(WidgetFieldLabelName, self).__init__(row, col, v, self.TYPE_NAME, **kwargs)
-        self._type = self.TYPE_NAME
+        super(WidgetFieldLabelName, self).__init__(row, col, v, WidgetFieldElement.TYPE_NAME, **kwargs)
+        #self._type = self.TYPE_NAME
 
 class WidgetFieldTitleName(WidgetFieldLabelName):
     pass
 
+class WidgetFieldButtonName(ActionEvent, WidgetFieldBehavior, ToggleButton):
+    (UNSELECTED, SELECTED) = range(2)
+    def __init__(self, row, col, n, **kwargs):
+        ActionEvent.__init__(self)
+        WidgetFieldBehavior.__init__(self, row, col, n, WidgetFieldElement.TYPE_NAME)
+        ToggleButton.__init__(self, text=self.covert_to_text(), **kwargs)
+        self.prop_value = self.UNSELECTED
+
+    def name(self):
+        return self._val
+
+    def write(self):
+        action = PropAction(col=self.col, name=self.name(), value=self.prop_value, time=time.time())
+        print(self.__class__.__name__, "write", action)
+        self.action = action
+
+    def on_state(self, inst, value):
+        if value == 'normal':
+            self.prop_value = self.UNSELECTED
+        else:
+            self.prop_value = self.SELECTED
+        self.write()
+
+    # def on_size(self, *args):
+    #     print(self.__class__.__name__, args)
+
+class WidgetFieldIndexButtonName(WidgetFieldButtonName):
+    disabled = BooleanProperty(False)
+
+    def __init__(self, row, col, n, **kwargs):
+        super(WidgetFieldIndexButtonName, self).__init__(row, col, n)
+        self.adjust_state()
+
+    def adjust_state(self):
+        if self.col == 0:
+            self.disabled = True
+
 class WidgetFieldLabelValue(WidgetFieldLabelBase):
     def __init__(self, row, col, v, max_v):
         self.max_value = max_v
-        super(WidgetFieldLabelValue, self).__init__(row, col, v, self.TYPE_VALUE)
-        self._type = self.TYPE_VALUE
+        super(WidgetFieldLabelValue, self).__init__(row, col, v, WidgetFieldElement.TYPE_VALUE)
+        self._type = WidgetFieldElement.TYPE_VALUE
 
 class WidgetFieldInputValue(ActionEvent, TextInput):
-    (TYPE_NAME, TYPE_VALUE) = ('NAME', 'VALUE')
+    #(TYPE_NAME, TYPE_VALUE) = ('NAME', 'VALUE')
     PAT_INPUT_CHAR = re.compile("[\da-fA-FxX]")
 
     #action = DictProperty({})
@@ -227,7 +268,7 @@ class WidgetFieldInputValue(ActionEvent, TextInput):
     #     return self._line_options
 
     def type(self):
-        return self.TYPE_VALUE
+        return WidgetFieldElement.TYPE_VALUE
 
     def is_type_name(self):
         return False
@@ -283,9 +324,8 @@ class WidgetFieldInputValue(ActionEvent, TextInput):
             print("Invalid input value:", text)
 
     def write(self, mode):
-        action = {'row': self.row, 'col': self.col, 'type': self.type(), 'value':self.value,
-                  'op': mode, 'time':time.time()}
-        print(self.__class__.__name__, "on_enter", action)
+        action = ValueAction(col=self.col, value=self.value, op=mode, time=time.time())
+        print(self.__class__.__name__, "write", action)
         self.action = action
 
     # if enter is pressed, execute write through to device, otherwith only write back to memory
@@ -314,7 +354,7 @@ class WidgetFieldInputValue(ActionEvent, TextInput):
         self.padding[0] = self._get_padding_left(self.text)
 
 class WidgetFieldElement(LayerBoxLayout):
-    NAMES_EXCLUSION = ('TBD','User data', '')
+    (TYPE_NAME, TYPE_VALUE) = ('NAME', 'VALUE')
     def __init__(self, **kwargs):
         #print(self.__class__.__name__, kwargs)
         self.row =  kwargs.get('row_idx')
@@ -370,6 +410,11 @@ class WidgetFieldElement(LayerBoxLayout):
                         return None
                 return cls_name
 
+    # def get_prop(self):
+    #     w = self.get_layer(WidgetFieldElement.TYPE_NAME)
+    #     if w:
+    #         return {w.get_value(): w.prop_value}
+
 class WidgetFieldIndexElement(WidgetFieldElement):
     def __init__(self, **kwargs):
         super(WidgetFieldIndexElement, self).__init__(**kwargs)
@@ -381,10 +426,31 @@ class WidgetFieldIndexElement(WidgetFieldElement):
             self.size_hint_x = self.idx_size_hint
 
 class WidgetRowIndexElement(LayerBoxLayout):
-    pass
+    # def get_prop(self):
+    #     properties = {}
+    #     for layer in self:
+    #         prop = layer.get_prop()
+    #         properties.update(prop)
+    #
+    #     return properties
+
+    def on_action(self, inst, act):
+        if inst != self:
+            action = Action.parse(act, zone='idx')
+            self.action = action
 
 class WidgetRowDataElement(LayerBoxLayout):
-    pass
+    # def get_prop(self):
+    #     properties = {}
+    #     for layer in self:
+    #         prop = layer.get_prop()
+    #         properties.update(prop)
+    #
+    #     return properties
+    def on_action(self, inst, act):
+        if inst != self:
+            action = Action.parse(act, zone='data')
+            self.action = action
 
 class WidgetRowElementBase(RecycleDataViewBehavior, LayerBoxLayout):
     (CHILD_ELEM_INDEX, CHILD_ELEM_DATA) = range(2)
@@ -427,15 +493,15 @@ class WidgetRowElementBase(RecycleDataViewBehavior, LayerBoxLayout):
         return cls_field_elem(page_id=page_id, row_idx=row_idx,
                                 class_field_name=cls_field_name, class_field_value=cls_field_value, **kwargs)
 
-    def refresh_data(self, data):
-        kwargs = data
-        w_row_kwargs = kwargs.get('w_row_kwargs')
-        row_mm = w_row_kwargs.get('row_mm')
-        layout = self.get_layer(self.CHILD_ELEM_DATA)
-        for child in layout.children:
-            child_v = child.get_layoer(WidgetFieldElement.VALUE)
-            value = row_mm.get_field_by_idx(child_v.col_idx())
-            child.set_value(value)
+    # def refresh_data(self, data):
+    #     kwargs = data
+    #     w_row_kwargs = kwargs.get('w_row_kwargs')
+    #     row_mm = w_row_kwargs.get('row_mm')
+    #     layout = self.get_layer(self.CHILD_ELEM_DATA)
+    #     for child in layout.children:
+    #         child_v = child.get_layoer(WidgetFieldElement.VALUE)
+    #         value = row_mm.get_field_by_idx(child_v.col_idx())
+    #         child.set_value(value)
 
     def do_fresh(self, kwargs):
         pass
@@ -461,7 +527,7 @@ class WidgetRowElement(WidgetRowElementBase):
 
         v_kwargs = kwargs.get('view_kwargs')
         page_id = v_kwargs.get('page_id')
-        row_id = v_kwargs.get('row_id')
+        self.row = row_id = v_kwargs.get('row_id')
         row_elem = v_kwargs.get('row_elem')
         self.row_elem = row_elem
 
@@ -500,9 +566,9 @@ class WidgetRowElement(WidgetRowElementBase):
                 parent.add_layer(name, w_field)
             self.add_layer(self.CHILD_ELEM_DATA, parent)
 
-        self.uniform_idx_height_to_data_row(row_id)
+        self._uniform_idx_height_to_data_row(row_id)
 
-    def uniform_idx_height_to_data_row(self, row_id):
+    def _uniform_idx_height_to_data_row(self, row_id):
         elem_data_row = self.get_layer(self.CHILD_ELEM_DATA)
         elem_idx_row = self.get_layer(self.CHILD_ELEM_INDEX)
         if elem_data_row and elem_idx_row:
@@ -513,6 +579,15 @@ class WidgetRowElement(WidgetRowElementBase):
                         elem_data_row.bind(minimum_height=elem.setter('height'))
                         #print(self.__class__.__name__, "uniform height [Row {}] height {} {}".format(row_id, elem.height, elem))
 
+    # def get_prop(self):
+    #     prop = {}
+    #     w = self.get_layer(self.CHILD_ELEM_INDEX)
+    #     prop['idx'] = w.get_prop()
+    #     w = self.get_layer(self.CHILD_ELEM_DATA)
+    #     prop['data'] = w.get_prop()
+
+    #    return prop
+
     def do_fresh(self, **kwargs):
         row_elem = kwargs.get('row_elem')
         for j, (name, field) in enumerate(row_elem):
@@ -520,7 +595,7 @@ class WidgetRowElement(WidgetRowElementBase):
             if layout:
                 layout.set_value(field.value)
 
-    def writeback_cache(self, **kwargs):
+    def __writeback_cache(self, **kwargs):
         col = kwargs['col']
         val = kwargs['value']
         for j, (name, field) in enumerate(self.row_elem):
@@ -528,11 +603,15 @@ class WidgetRowElement(WidgetRowElementBase):
                 field.set_value(val)
                 break
 
-    def on_action(self, inst, action):
+    def on_action(self, inst, act):
         if inst != self:
-            op = action.get('op')
-            self.writeback_cache(**action)
-            if op == 'wt':  #only write through will report to hight layer
+            action = Action.parse(act, row=self.row)
+            if action.is_event('value'):
+                if action.is_op('w'):
+                    self.__writeback_cache(**action)
+                    if action.is_op('wt'):  #only write through will report to hight layer
+                        self.action = action
+            else:
                 self.action = action
 
 class WidgetRowTitleElement(WidgetRowElement):
