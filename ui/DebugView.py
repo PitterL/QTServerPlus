@@ -16,6 +16,8 @@ from kivy.properties import ObjectProperty, BooleanProperty, ListProperty, \
     ReferenceListProperty, AliasProperty, VariableListProperty
 from kivy.clock import Clock
 
+from ui.WidgetExt import KeyboardShotcut
+
 import re
 from functools import partial
 from collections import OrderedDict
@@ -653,15 +655,20 @@ class CommandResultArea(BoxLayout):
         print(self.__class__.__name__, "on_command_send", args)
 
 class DebugView(FloatLayout):
-    activated = BooleanProperty(False)
+    #activated = BooleanProperty(False)
 
     selected_command = StringProperty('')
     #history_command = ListProperty('')
 
-    def __init__(self, win=None):
+    KeyEvent = {
+        'ctrl_d':(100, 'ctrl'),   # ctrl + d
+        'esc':(27, None)}  # esc
+
+    def __init__(self):
         super(DebugView, self).__init__()
         self._layout = {}
-        self._root = win
+        #self._root = win
+        self.activated = False
 
         command_list = Command.command_format_list()
         self.w_cmd_tree = self.ids['commandtree']
@@ -758,74 +765,96 @@ class DebugView(FloatLayout):
 
         self.append_msg_log(value)
 
-    def on_activated(self, inst, status):
-        #print(self.__class__.__name__, inst, status)
-        if self._root:
-            if status:
-                self._root.add_widget(self)
-            else:
-                self._root.remove_widget(self)
-
-    def on_keyboard_down(self, keyboard, keycode, text, modifiers):
-        scancode= keycode[0]
-        # print('The key', scancode, 'have been pressed')
-        # print(' - text is %r' % text)
-        # print(' - modifiers are %r' % modifiers)
-        if scancode == 100 and modifiers == ['ctrl']:   #ctrl + d
-            # print(self.__class__.__name__, self.activated)
-            self.activated = not self.activated
-            return True
-        elif scancode == 27:
-            if self.activated:
-                self.activated = False
-                return True
-        elif scancode == 13:
-            if self.activated:
-                pass
-
-    def keyboard_shortcut1(self, win, scancode, *largs):
-        #print(self.__class__.__name__, win, scancode, largs)
-        modifiers = largs[-1]
-        if scancode == 100 and modifiers == ['ctrl']:
-            print(self.__class__.__name__, self.activated)
-            self.activated = not self.activated
-            return True
-        elif scancode == 27:
-            if self.activated:
-                self.activated = False
-                return True
+    # def on_activated(self, inst, status):
+    #     #print(self.__class__.__name__, inst, status)
+    #     if self._root:
+    #         if status:
+    #             self._root.add_widget(self)
+    #         else:
+    #             self._root.remove_widget(self)
 
     @staticmethod
-    def register_debug_view(win=None):
-        from kivy.core.window import Window
+    def _on_keyboard_down(root, inst, event):
+        if event == 'ctrl_d':
+            activated = inst not in root.children
+        elif event == 'esc':
+            activated = False
 
-        if not win:
-            win = Window
+        if activated:
+            root.add_widget(inst)
+        else:
+            root.remove_widget(inst)
 
-        view = DebugView(win=win)
-        view._keyboard = Window.request_keyboard(
-            view._keyboard_closed, view, 'text')
-        if view._keyboard.widget:
-            # If it exists, this widget is a VKeyboard object which you can, !use
-            # to change the keyboard layout.
-            pass
-        view._keyboard.bind(on_key_down=view.on_keyboard_down)
+    @staticmethod
+    def register_debug_view():
+        view = DebugView()
+        for name, key in DebugView.KeyEvent.items():
+            watch = key + (DebugView._on_keyboard_down,)
+            KeyboardShotcut.register_keyboard(watch, view, name)
+
         return view
 
-    def _keyboard_closed(self):
-        print('My keyboard have been closed!')
-        #self._keyboard.unbind(on_key_down=self._on_keyboard_down)
-        #self._keyboard = None
+    # def on_keyboard_down(self, keyboard, keycode, text, modifiers):
+    #     scancode= keycode[0]
+    #     # print('The key', scancode, 'have been pressed')
+    #     # print(' - text is %r' % text)
+    #     # print(' - modifiers are %r' % modifiers)
+    #     if scancode == 100 and modifiers == ['ctrl']:   #ctrl + d
+    #         # print(self.__class__.__name__, self.activated)
+    #         self.activated = not self.activated
+    #         return True
+    #     elif scancode == 27:
+    #         if self.activated:
+    #             self.activated = False
+    #             return True
+    #     elif scancode == 13:
+    #         if self.activated:
+    #             pass
+    #
+    # def keyboard_shortcut1(self, win, scancode, *largs):
+    #     #print(self.__class__.__name__, win, scancode, largs)
+    #     modifiers = largs[-1]
+    #     if scancode == 100 and modifiers == ['ctrl']:
+    #         print(self.__class__.__name__, self.activated)
+    #         self.activated = not self.activated
+    #         return True
+    #     elif scancode == 27:
+    #         if self.activated:
+    #             self.activated = False
+    #             return True
 
-    def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
-        # print('The key', keycode, 'have been pressed')
-        # print(' - text is %r' % text)
-        # print(' - modifiers are %r' % modifiers)
-        # Keycode is composed of an integer + a string
-        # If we hit escape, release the keyboard
-        if keycode[1] == 'escape':
-            keyboard.release()
-        #
+    # @staticmethod
+    # def register_debug_view(win=None):
+    #     from kivy.core.window import Window
+    #
+    #     if not win:
+    #         win = Window
+    #
+    #     view = DebugView(win=win)
+    #     view._keyboard = Window.request_keyboard(
+    #         view._keyboard_closed, view, 'text')
+    #     if view._keyboard.widget:
+    #         # If it exists, this widget is a VKeyboard object which you can, !use
+    #         # to change the keyboard layout.
+    #         pass
+    #     view._keyboard.bind(on_key_down=view.on_keyboard_down)
+    #     return view
+    #
+    #
+    # def _keyboard_closed(self):
+    #     print('My keyboard have been closed!')
+    #     #self._keyboard.unbind(on_key_down=self._on_keyboard_down)
+    #     #self._keyboard = None
+    #
+    # def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
+    #     # print('The key', keycode, 'have been pressed')
+    #     # print(' - text is %r' % text)
+    #     # print(' - modifiers are %r' % modifiers)
+    #     # Keycode is composed of an integer + a string
+    #     # If we hit escape, release the keyboard
+    #     if keycode[1] == 'escape':
+    #         keyboard.release()
+    #     #
 
 if __name__ == '__main__':
     from kivy.app import App
@@ -837,7 +866,8 @@ if __name__ == '__main__':
     class DebugViewApp(App):
 
         def build(self):
-            root = DebugView()
+            KeyboardShotcut()
+            root = DebugView.register_debug_view()
             inspector.create_inspector(Window, root)
             return root
 

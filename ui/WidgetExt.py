@@ -27,6 +27,16 @@ class Action(dict):
         if op:
             return check_op(op, name)
 
+    def is_id(self, name):
+        id = self.get('id')
+        if id:
+            return id == name
+
+    def is_name(self, name):
+        n = self.get('name')
+        if n:
+            return n == name
+
     @staticmethod
     def parse(action, **kwargs):
         return Action(**action, **kwargs)
@@ -94,6 +104,9 @@ class LayerBehavior(object):
     def __len__(self):
         return len(self.__layers)
 
+    def layer_count(self):
+        return len(self.__layers)
+
     def keys(self):
         return self.__layers.keys()
 
@@ -120,7 +133,7 @@ class LayerBehavior(object):
         return self.__layers.get(name)
 
     def add_layer(self, name, widget):
-        assert name not in self.__layers
+        assert name not in self.__layers.keys()
         self.__layers[name] = widget
 
     def remove_layer(self, name):
@@ -226,3 +239,79 @@ class LayerBoxLayout(LayerBoxLayoutBase):
             self.set_default_minimum_height()
 
 Factory.register('LayerBoxLayout', cls=LayerBoxLayout)
+
+class KeyboardShotcut(object):
+    WatchLists = {}
+    KeyHandle = None
+
+    def __init__(self, **kwargs):
+        if not KeyboardShotcut.KeyHandle:
+            from kivy.core.window import Window
+            KeyboardShotcut.KeyHandle = Window.bind(on_keyboard=KeyboardShotcut.keyboard_shortcut)
+
+        super(KeyboardShotcut, self).__init__(**kwargs)
+
+    @staticmethod
+    def register_keyboard(key_watch_struct, inst, *param):
+        #(scancode, modifiers, callback)
+        if len(key_watch_struct) == 3:
+            KeyboardShotcut.WatchLists[key_watch_struct] = (inst, param)
+    #
+    # def request_keyboard(self, win):
+    #     from kivy.core.window import Window
+    #
+    #     if not win:
+    #         win = Window
+    #
+    #     self._keyboard = win.request_keyboard(
+    #         self._keyboard_closed, self, 'text')
+    #     if self._keyboard.widget:
+    #         # If it exists, this widget is a VKeyboard object which you can, !use
+    #         # to change the keyboard layout.
+    #         pass
+    #     self._keyboard.bind(on_key_down=self.on_keyboard_down)
+    #
+    # def _keyboard_closed(self):
+    #     print('My keyboard have been closed!')
+    #     # self._keyboard.unbind(on_key_down=self._on_keyboard_down)
+    #     # self._keyboard = None
+    #
+    # def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
+    #     # print('The key', keycode, 'have been pressed')
+    #     # print(' - text is %r' % text)
+    #     # print(' - modifiers are %r' % modifiers)
+    #     # Keycode is composed of an integer + a string
+    #     # If we hit escape, release the keyboard
+    #     if keycode[1] == 'escape':
+    #         keyboard.release()
+    #         #
+    #
+    # def keyboard_shortcut1(self, win, scancode, *largs):
+    #     #print(self.__class__.__name__, win, scancode, largs)
+    #     modifiers = largs[-1]
+    #     if scancode == 100 and modifiers == ['ctrl']:
+    #         print(self.__class__.__name__, self.activated)
+    #         self.activated = not self.activated
+    #         return True
+    #     elif scancode == 27:
+    #         if self.activated:
+    #             self.activated = False
+    #             return True
+
+    @staticmethod
+    def keyboard_shortcut(win, scancode, *largs):
+        #print(self.__class__.__name__, win, scancode, largs)
+        modifiers = largs[-1]
+        for watch in KeyboardShotcut.WatchLists.items():
+            (code, mod, fn), (inst, param) = watch
+            if scancode == code:
+                if isinstance(mod, (list, tuple)):
+                    if tuple(mod) != tuple(modifiers):
+                        continue
+                else:
+                    if len(modifiers) != 1 or modifiers[0] != mod:
+                        continue
+
+                fn(win, inst, *param)
+
+        return True

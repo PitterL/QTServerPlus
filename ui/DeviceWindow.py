@@ -74,7 +74,7 @@ class DeviceWindow(ActionEventWrapper, BoxLayout):
     def send_command_to(self, pipe):
         if len(self.cmd_list):
             busy = any([cmd.is_status(cmd.SEND) for cmd in self.cmd_list])
-            #print(self.__class__.__name__,self.cmd_list, busy)
+            print(self.__class__.__name__,self.cmd_list, busy)
             if busy:
                 print(self.__class__.__name__,"send_command busy", self.cmd_list)
             else:
@@ -365,8 +365,9 @@ if __name__ == '__main__':
     from kivy.core.window import Window
     inspector.create_inspector(Window, root)
 
-    dbg_view = DebugView(win=Window)
-    Window.bind(on_keyboard=dbg_view.keyboard_shortcut1)
+    #dbg_view = DebugView(win=Window)
+    #Window.bind(on_keyboard=dbg_view.keyboard_shortcut1)
+    #debug_view = DebugView.register_debug_view()
 
     #start ui
     app = DeviceWindowApp(root)

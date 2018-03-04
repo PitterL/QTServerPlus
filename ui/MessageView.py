@@ -1,11 +1,14 @@
 from kivy.clock import Clock
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.layout import Layout
 from kivy.uix.label import Label
+from kivy.uix.button import Button
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.tabbedpanel import TabbedPanelHeader, TabbedPanelItem
 
-from ui.WidgetExt import PropAction, ActionEvent, LayerActionWrapper, LayerBoxLayout
+from ui.WidgetExt import Action, PropAction, ActionEvent, LayerActionWrapper, LayerBoxLayout
 from ui.WidgetExt import LayerBehavior, ActionEvent, ActionEventWrapper
 from ui.TableElement import WidgetPageLayout
 from ui.TableElement import WidgetPageContentRecycleElement
@@ -17,40 +20,7 @@ from ui.PageElement import WidgetPageMultiInstElement
 from ui.PageElement import PageContext, WidgetPageMultiInstElement, WidgetPageElement, WidgetPageLayout
 
 from collections import OrderedDict
-
-class WidgetMsgCtrlButton(ActionEvent, ToggleButton):
-    def __init__(self, name):
-        super(WidgetMsgCtrlButton, self).__init__()
-        self.text = name
-
-    def write(self):
-        action = PropAction(name='ctrl', id=self.text, state=value)
-        self.action = action
-
-    def on_state(self, inst, value):
-        print(self.__class__.__name__, inst, value)
-        #self.action = {'name':'ctrl', 'id': self.text, 'state':value}
-
-    def on_focus(self, inst, value):
-        print(self.__class__.__name__, inst, value)
-
-class MessageSettingBar(LayerBoxLayout):
-    CTRL_LIST = ("Setting", "Raw")
-    def __init__(self, name):
-        super(MessageSettingBar, self).__init__()
-        for name in self.CTRL_LIST:
-            self.add_layer(name, WidgetMsgCtrlButton(name))
-
-class MessageContentElement(LayerActionWrapper, Label):
-
-    def __init__(self):
-        super(MessageContentElement, self).__init__()
-
-# class MessageView(LayerBoxLayout):
-#     def __init__(self):
-#         super(MessageView, self).__init__()
-#         self.add_layer('setting', MessageSettingBar())
-        self.add_layer('setting', MessageContentElement())
+import time
 
 class WidgetRepoElement(ActionEventWrapper, TabbedPanelItem):
     PAGE_CLS_LAYOUT_TABLE = {
@@ -136,10 +106,11 @@ class WidgetRepoMultiInstElement(WidgetPageMultiInstElement):
                 # tab = self._content.get_current_tab()
                 # tab.dispatch('on_press')
 
-class MessageView(PageContext):
-    @staticmethod
-    def register_message_view():
-        return MessageView()
+class MessageSettingContent(PageContext):
+    NAME = 'Setting'
+
+    def __init__(self, **kwargs):
+        super(MessageSettingContent, self).__init__(**kwargs)
 
     def create_repo_element(self, repo_insts):
         assert repo_insts
@@ -168,6 +139,9 @@ class MessageView(PageContext):
                     parent_widget.add_page(repo_id, w_repo)
 
         return w_repo
+
+    def insert_cb(self):
+        self.switch_tab()
         #
         # if len(repo_insts) == 1:
         #     widget = WidgetRepoElement(major, repo_mm)
@@ -196,6 +170,187 @@ class MessageView(PageContext):
         #     parent_widget.add_page(report_id, widget)
         # else:
         # return widget
+
+class MessageTextContent(LayerActionWrapper, Label):
+    NAME = 'Message'
+
+    # def __init__(self, **kwargs):
+    #     super(MessageTextContent, self).__init__(**kwargs)
+
+        #
+    # def __init__(self):
+    #     super(MessageTextContent, self).__init__()
+
+# class MessageView(LayerBoxLayout):
+#     def __init__(self):
+#         super(MessageView, self).__init__()
+#         self.add_layer('setting', MessageSettingBar())
+#         self.add_layer('setting', MessageContentElement())
+
+class WidgetMsgCtrlButton(ActionEvent, ToggleButton):
+    def __init__(self, name):
+        super(WidgetMsgCtrlButton, self).__init__()
+        self.text = name
+
+    def write(self, value):
+        action = PropAction(name=self.text, value=value, time=time.time())
+        print(self.__class__.__name__, "write", action)
+        self.action = action
+
+    def on_state(self, inst, state):
+        print(self.__class__.__name__, inst, state)
+        #self.action = {'name':'ctrl', 'id': self.text, 'state':value}
+        if state == 'down':
+            val = True
+        else:
+            val = False
+
+        self.write(val)
+
+    # def on_focus(self, inst, value):
+    #     print(self.__class__.__name__, inst, value)
+
+class WidgetMsgSwitchButton(ActionEvent, Button):
+    def __init__(self, props):
+        self.props = props
+        self.curr = 0
+        super(WidgetMsgSwitchButton, self).__init__(text=props[0])
+
+    def next_curr(self):
+        self.curr += 1
+        self.curr %= len(self.props)
+        return self.curr
+
+    def switch(self):
+        curr = self.next_curr()
+        self.text = self.props[curr]
+
+
+    def write(self):
+        for i, s in enumerate(self.props):
+            if i != self.curr:
+                action = PropAction(name=s, value=False, time=time.time())
+                print(self.__class__.__name__, "write", action)
+                self.action = action
+
+        action = PropAction(name=self.text, value=True, time=time.time())
+        print(self.__class__.__name__, "write", action)
+        self.action = action
+
+    def on_release(self):
+            self.switch()
+            self.write()
+
+class MessageBaseControlBar(LayerBoxLayout):
+
+    def __init__(self, name, ctrl_list, cls_btn, **kwargs):
+        self._name = name
+        super(MessageBaseControlBar, self).__init__(**kwargs)
+        for ctrl in ctrl_list:
+            self.add_layer(ctrl, cls_btn(ctrl))
+
+    def on_action(self, inst, act):
+        if inst != self:
+            self.action = Action.parse(act, id=self._name)
+
+class MessageGlobelControlBar(MessageBaseControlBar):
+    NAME = 'ctrl_g'
+    CTRL_LIST = (('Mark','Raw'), (MessageTextContent.NAME,MessageSettingContent.NAME))
+    def __init__(self, **kwargs):
+        super(MessageGlobelControlBar, self).__init__(self.NAME, self.CTRL_LIST, WidgetMsgSwitchButton, **kwargs)
+
+class MessageRegControlBar(MessageBaseControlBar):
+    NAME = 'ctrl_r'
+    CTRL_LIST = ('All',)
+    def __init__(self, **kwargs):
+        super(MessageRegControlBar, self).__init__(self.NAME, self.CTRL_LIST, WidgetMsgCtrlButton, **kwargs)
+
+    def create_repo_element(self, repo_insts):
+        repo_mm = repo_insts[0]
+        major, _ = repo_mm.page_id()
+        self.add_layer(major, WidgetMsgCtrlButton(str(major)))
+
+class MessageContent(LayerBehavior, ActionEventWrapper, BoxLayout):
+    NAME = 'Content'
+    def __init__(self, **kwargs):
+        super(MessageContent, self).__init__(**kwargs)
+        self._cls_bar_list = {MessageGlobelControlBar: True,
+                        MessageRegControlBar: True,
+                        MessageSettingContent: False,
+                        MessageTextContent: True}
+
+        for cls, state in self._cls_bar_list.items():
+            w = cls()
+            self.add_layer(cls.NAME, w)
+            if state:
+                self.insert(cls.NAME)
+
+        # self.add_layer('setting', MessageSettingContent())
+        # self.add_layer('text', MessageTextContent())
+
+    def create_repo_element(self, repo_insts):
+        for layer in self.get_layers():
+            if hasattr(layer, 'create_repo_element'):
+                layer.create_repo_element(repo_insts)
+
+    def change_bar_status(self, name):
+        if name in self._cls_bar_list.keys():
+            status = self._cls_bar_list[name]
+            self._cls_bar_list[name] = not status
+            return status
+
+    def insert(self, name):
+        layer = self.get_layer(name)
+        if layer is not None:
+            if not layer.parent:
+                self.add_widget(layer)
+                if hasattr(layer, 'insert_cb'):
+                    layer.insert_cb()
+
+    def remove(self, name):
+        layer = self.get_layer(name)
+        if layer is not None:
+            if layer in self.children:
+                self.remove_widget(layer)
+
+    def on_size(self, inst, size):
+        print(self.__class__.__name__, inst, size)
+
+    def on_action(self, inst, act):
+        if inst != self:
+            action = Action.parse(act)
+            if action.is_event('prop'):
+                if action.is_id('ctrl_g'):
+                    name = action.get('name')
+                    value = action.get('value')
+                    if name in self.get_layer_names():
+                        if value:
+                            self.insert(name)
+                        else:
+                            self.remove(name)
+
+            self.action = action
+
+class MessageView(LayerActionWrapper, FloatLayout):
+    def __init__(self, **kwargs):
+        super(MessageView, self).__init__(**kwargs)
+        self.add_layer(MessageContent.NAME, MessageContent())
+
+    @staticmethod
+    def register_message_view():
+        return MessageView()
+
+    def create_repo_element(self, repo_insts):
+        assert repo_insts
+
+        for layer in self.get_layers():
+            if hasattr(layer, 'create_repo_element'):
+                layer.create_repo_element(repo_insts)
+
+    def handle_data(self, msg_mm):
+        assert msg_mm
+        layer = self.get_child_layer([MessageContent.NAME, MessageSettingContent.NAME])
+
 
 if __name__ == '__main__':
     import array, os
@@ -259,8 +414,7 @@ if __name__ == '__main__':
                         if repo_mm:
                             repo_insts.append(repo_mm)
                     root.create_repo_element(repo_insts)
-            Clock.schedule_once(lambda dt: root.switch_tab())
+            #Clock.schedule_once(lambda dt: root.switch_tab())
             return root
-
 
     MessageViewApp().run()

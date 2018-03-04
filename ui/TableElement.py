@@ -666,7 +666,7 @@ class WidgetRecycleDataView(RecycleDataViewBehavior, LayerBoxLayout):
         #layout.update(size = layer.minimum_size)
         size = layout.get('size')
         if not size or size[1] != layer.height:
-            print(self.__class__.__name__, "[IDX {}] height mismatch {} {}, refresh data", index, layer.size, layer.minimum_size)
+            print(self.__class__.__name__, "[IDX {}] height mismatch {} {}, refresh data".format(index, layer.size, layer.minimum_size))
             #self.refresh_from_data()
             rv.refresh_from_data()
         return super(WidgetRecycleDataView, self).refresh_view_layout(rv, index, layout, viewport)

@@ -411,7 +411,7 @@ class Page1Mem(PageElementMmap):
     PAGE_TITLE = ((('N',1),), ROW_MMAP)
 
     def __init__(self, object_num, values=None):
-        self.reg_report_table = OrderedDict()   #store report id range for each reg
+        self.reg_report_table = OrderedDict()   #page_id to repo id map
         desc = PageElementMmap.PageDesc(self.PAGE_TITLE)
         for i in range(object_num):
             idx = (str(i), 1)
@@ -606,7 +606,7 @@ class PagesMemoryMap(object):
 
     def set_mem_map(self, mmem):
         #print(self.__class__.__name__, "set_mem_map", mmem)
-        self.mem_map[mmem.id()] = mmem
+        self.mem_map[mmem.id()] = mmem  #repo id to mmsg
 
     def get_mem_map_tab(self, page_id=None):
         if page_id is not None:
@@ -664,12 +664,12 @@ class PagesMemoryMap(object):
                     self.set_mem_map(mmem)
                     if num_repo:
                         inst_repo_range = (repo_st, repo_st + num_repo - 1)
-                        page1_mmap.set_reg_reporter(page_id, inst_repo_range)
+                        page1_mmap.set_reg_reporter(page_id, inst_repo_range)   #page_id to repo id map
                         msg_reg = self.get_mem_map_tab((5, 0))
                         for j in range(num_repo):
                             desc = self.load_page_msg_desc(page_id, j, len(msg_reg))
                             mmsg = PageMessageMap(page_id, inst, repo_st + j, inst_repo_range, desc)
-                            self.set_msg_map(mmsg)
+                            self.set_msg_map(mmsg)  #repo id to mmsg map
                         repo_st += num_repo
 
 class ChipMemoryMap(object):

@@ -16,13 +16,14 @@ from multiprocessing import Pipe
 
 from server.message import Message
 from ui.DeviceWindow import DeviceWindow
-from ui.DebugView import DebugView
+#from ui.DebugView import DebugView
+from ui.WidgetExt import KeyboardShotcut
 
 class UiError(Exception):
     "Message error exception class type"
     pass
 
-class MainScreen(Screen):
+class MainScreen(KeyboardShotcut, Screen):
     "Main Screen"
     hue = NumericProperty(0)
     windows = DictProperty({})
@@ -80,6 +81,8 @@ class MainScreen(Screen):
 class MainUi(App):
     "Main Ui"
 
+    UI_REFRESH_RATE = 1/60 # Hz
+
     def __init__(self, pipe_ui_with_server, **kwargs):
         self.pipe_ui_with_server = pipe_ui_with_server
         super(MainUi, self).__init__(**kwargs)
@@ -107,7 +110,7 @@ class MainUi(App):
         root = ScreenManager(transition=FallOutTransition())
         scr = MainScreen(self.pipe_ui_with_server, name='Main Screen')
         root.add_widget(scr)
-        Clock.schedule_interval(scr.update, 1.0 / 60.0)
+        Clock.schedule_interval(scr.update, self.UI_REFRESH_RATE)
         return root
 
 if __name__ == '__main__':
