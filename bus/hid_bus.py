@@ -58,14 +58,14 @@ class HidCommand(Message):
         #print(self.__class__.__name__, "init", type, seq, kwargs)
         self.usage = kwargs.pop('usage')
 
-        self._delay = kwargs.pop('repeat', None)
-        if self._delay is not None:
-            self._repeat = True
+        self._repeat_value = kwargs.pop('repeat', None)
+        if self.repeatable():
+            #self._repeat = True
             self.repeat_count = 0
-        else:
-            self._repeat = False
+        # else:
+        #     self._repeat = False
 
-        self.__timeout = kwargs.pop('timeout', 0)
+        #self.__timeout = kwargs.pop('timeout', 0)
 
         super(HidCommand, self).__init__(HidCommand.NAME, type, 0, seq, **kwargs)
 
@@ -109,8 +109,8 @@ class HidCommand(Message):
 
     def __str__(self):
         return self.__class__.__name__ + " " + super().__str__() + \
-               " op={} len={} delay={} timeout={} repeat={}".format(
-                   self.op, self.transfered_size(), self.delay(), self.timeout(), self.repeatable())
+               " op={} len={} timeout={} repeat={}".format(
+                   self.op, self.transfered_size(), self.timeout(), self._repeat_value)
 
     def is_read(self):
         return 'size_r' in self.kwargs.keys()
@@ -138,31 +138,25 @@ class HidCommand(Message):
     def transfered_size(self):
         return self.trans_size
 
-    def timeout(self, delay=None):
-        if delay is None:
-            delay = self.__timeout
-        return time.time() >= self.time() + delay
+    # def delay(self):
+    #     return self._delay
 
-    def delay(self):
-        return self._delay
-
-    def delayed(self, delay=None):
-        if delay is None:
-            delay = self.delay()
-        return time.time() >= self.time() + delay
+    # def delayed(self, delay=None):
+    #     if delay is None:
+    #         delay = self.delay()
+    #     return time.time() >= self.time() + delay
 
     def delay_time(self):  #how long message could be send
         status = self.status()
-        delayed = time.time() - self.time()
         if status == Message.INIT:
             return 0
         elif status == Message.SEND:
-            return self.timeout() - delayed
+            return self.time_left()
         elif status == Message.REPEAT:
-            return self.delay() - delayed
+            return self.time_left(self._repeat_value)
 
     def repeatable(self):
-        return self._repeat
+        return self._repeat_value is not None
 
     def reset_repeat(self, status):
         if status == Message.REPEAT:
@@ -173,7 +167,7 @@ class HidCommand(Message):
         self.set_status(status)
 
     def ready(self):
-        return self.is_status(Message.INIT) or (self.is_status(Message.REPEAT) and self.delayed())
+        return self.is_status(Message.INIT) or (self.is_status(Message.REPEAT) and self.timeout(self._repeat_value))
 
     def raw_data(self):
         return self.__raw_data
@@ -338,8 +332,11 @@ class Hid_Device(PhyDevice):
         seq = Message.seq_root()
 
         value = msg.value()
-        return DeviceMessage(type, self.id(), seq, value=value,
-                      pipe=self.logic_pipe()).send()
+        if value[0] == 0:
+            return DeviceMessage(type, self.id(), seq, value=value[1:],
+                          pipe=self.logic_pipe()).send()
+        else:
+            print(self.__class__.__name__, "Invalid irq message:", value)
 
     def handle_hid_nak_message(self, cmd):
         seq = cmd.seq()  # to parent seq

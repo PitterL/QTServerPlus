@@ -195,13 +195,17 @@ class ElemNameBase(Scatter):
         self.ids['content'].text = self.to_widget_name(self.name)
 
     def to_widget_name(self, name):
-        pat = re.compile('[^_]+')
-        result = pat.search(self.name)
-        if result:
-            text = result.group().upper()
+        # pat = re.compile('[^_]+')
+        # result = pat.search(self.name)
+        # if result:
+        #     text = result.group().upper()
+        # else:
+        #     text = '-'
+
+        if not self.name.startswith('_'):
+            text = self.name.upper()
         else:
             text = '-'
-
         return text
 
 class CommandElemNameWidget(ElemNameBase):

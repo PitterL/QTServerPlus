@@ -72,15 +72,11 @@ class Message(BaseMessage):
         return Token([])
 
     def __init__(self, location, type, id, seq, **kwargs):
-        self._status = Message.INIT
-
-        if 'pipe' in kwargs.keys():
-            self.pipe = kwargs.pop('pipe')
-        else:
-            self.pipe = None
-
-        self.__time = time.time()
+        self.pipe = kwargs.pop('pipe', None)
+        self._timeout_value = kwargs.pop('timeout', None)
         super(Message, self).__init__(location, type, id, seq, **kwargs)
+
+        self.set_status(Message.INIT)
 
     def __repr__(self):
         return super(Message, self).__repr__()
@@ -89,7 +85,19 @@ class Message(BaseMessage):
         return super().__str__() + " " + "time={} ready={} status={}".format(self.time(), self.ready(), self.status())
 
     def time(self):
-        return self.__time
+        return self._time
+
+    def time_left(self, delay=None):    # if <=0 timeout
+        if delay is None:
+            delay = self._timeout_value
+
+        if delay:
+            return self.time() + delay - time.time()
+        else:
+            return float('inf')
+
+    def timeout(self, delay=None):
+        return self.time_left(delay) <= 0
 
     def status(self):
         return self._status
@@ -99,7 +107,7 @@ class Message(BaseMessage):
 
     def set_status(self, status):
         self._status = status
-        self.__time = time.time()
+        self._time = time.time()
 
     def set_pipe(self, pipe):
         self.pipe = pipe

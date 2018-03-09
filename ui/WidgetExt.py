@@ -64,30 +64,51 @@ class ActionEvent(object):
     def action_bind(self, widget):
         action = widget.property('action', True)
         if action:
-            #print(self.__class__.__name__, "bind:", widget, "---", self)
+            #print(self.__class__.__name__, "actionbind:", widget, "--", self)
             widget.bind(action=self.on_action)
 
     def action_unbind(self, widget):
         action = widget.property('action', True)
         if action:
-            #print(self.__class__.__name__, "unbind:", widget, "---", self)
+            #print(self.__class__.__name__, "action unbind:", widget, "--", self)
             widget.unbind(action=self.on_action)
+
+    disposal = DictProperty({})
+
+    def on_disposal(self, inst, disposal):
+        #override this disposal to process command, of set directly property from higher level
+        if inst is not self:
+            print(self.__class__.__name__, "on_disposal", inst, disposal)
+            self.disposal = disposal
+
+    def disposal_bind(self, widget):
+        if hasattr(widget, 'on_disposal'):
+            #print(self.__class__.__name__, "disposal bind:", self, "--", widget)
+            self.bind(disposal=widget.on_disposal)
+
+    def disposal_unbind(self, widget):
+        if hasattr(widget, 'on_disposal'):
+            #print(self.__class__.__name__, "disposal unbind:", self, "--", widget)
+            self.unbind(disposal=widget.on_disposal)
 
 Factory.register('ActionEvent', cls=ActionEvent)
 
 class ActionEventWrapper(ActionEvent):
     def add_widget(self, widget, *args):
         self.action_bind(widget)
+        self.disposal_bind(widget)
         super(ActionEventWrapper, self).add_widget(widget, *args)
 
     def remove_widget(self, widget):
         self.action_unbind(widget)
+        self.disposal_bind(widget)
         super(ActionEventWrapper, self).remove_widget(widget)
 
     def clear_widgets(self, **kwargs):
         children = kwargs.get('children', self.children)
         for child in children:
             self.action_unbind(child)
+            child.disposal_unbind(self)
 
         super(ActionEventWrapper, self).clear_widgets(**kwargs)
 
@@ -101,10 +122,9 @@ class LayerBehavior(object):
     def __iter__(self):
         return iter(self.__layers.items())
 
-    def __len__(self):
-        return len(self.__layers)
-
-    def layer_count(self):
+    # def __len__(self):
+    #     return len(self.__layers)
+    def count(self):
         return len(self.__layers)
 
     def keys(self):
@@ -171,12 +191,14 @@ class LayerActionWrapper(LayerBehavior, ActionEvent):
     def add_layer(self, name, widget):
         super(LayerActionWrapper, self).add_layer(name, widget)
         super(LayerActionWrapper, self).action_bind(widget)
+        super(LayerActionWrapper, self).disposal_bind(widget)
         super(LayerActionWrapper, self).add_widget(widget)
 
     def remove_layer(self, name):
         w = super(LayerActionWrapper, self).remove_layer(name)
         if w:
             super(LayerActionWrapper, self).action_unbind(w)
+            super(LayerActionWrapper, self).disposal_unbind(w)
             super(LayerActionWrapper, self).remove_widget(w)
 
     def clear_layer(self):
@@ -197,12 +219,14 @@ class LayerBoxLayoutBase(LayerBehavior, ActionEvent, BoxLayout):
     def add_layer(self, name, widget):
         super(LayerBoxLayoutBase, self).add_layer(name, widget)
         self.action_bind(widget)
+        self.disposal_bind(widget)
         self.add_widget(widget)
 
     def remove_layer(self, name):
         if name in super(LayerBoxLayoutBase, self).get_layer_names():
             w = super(LayerBoxLayoutBase, self).get_layer(name)
             self.action_unbind(w)
+            self.disposal_unbind(w)
             self.remove_widget(w)
             super(LayerBoxLayoutBase, self).remove_layer(name)
 

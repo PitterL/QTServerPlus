@@ -2,6 +2,7 @@ from collections import OrderedDict
 import struct
 import array
 import ctypes
+import copy
 import os, re, json
 from functools import partial
 
@@ -31,20 +32,21 @@ class RowElement(object):
                 print(self.__class__.__name__, "set_value overflow", self, value)
 
     def __init__(self, row_desc):
-        self.idx_desc = row_desc.idx
-        self.content_desc = row_desc.content
+        # self.idx_desc = row_desc.idx
+        # self.content_desc = row_desc.content
+        self.desc = row_desc
         self.fields = OrderedDict()
         self._pos = 0   #store filed relative pos in initilize
         self.value_size = self.MAX_FIELD_SIZE // 8
 
-        for n, v in self.content_desc:
+        for n, v in self.desc.data_content():
             self.add_field(n, v)
 
         # for n, v in ele_d:
         #     self.add_field(n, v)
 
     def __str__(self):
-        return self.__class__.__name__ + str((self.idx_desc, self.content_desc))
+        return self.__class__.__name__ + str((self.desc))
 
     def __repr__(self):
         return '<' + self.__str__() + '>'
@@ -61,11 +63,14 @@ class RowElement(object):
     def keys(self):
         return list(self.fields.keys())
 
-    def field_values(self):
-        return list(self.fields.values())
-
     def values(self):
         return [field.value for field in self.fields.values()]
+
+    def items(self):
+        return dict(zip(self.keys(), self.values()))
+
+    def field_values(self):
+        return list(self.fields.values())
 
     def add_field(self, name, width):
         if name not in self.fields.keys():  #Input filed order from Bit 7 to Bit 0
@@ -137,13 +142,14 @@ class RowElementByte(object):
                 print(self.__class__.__name__, "set_value overflow", self, value)
 
     def __init__(self, row_desc):
-        self.idx_desc = row_desc.idx
-        self.content_desc = row_desc.content
+        # self.idx_desc = row_desc.idx
+        # self.content_desc = row_desc.content
+        self.desc = row_desc
         self.fields = OrderedDict()
         self.pos = 0
         self.value_size = 0
 
-        for name, width in self.content_desc:
+        for name, width in self.desc.data_content():
             self.add_field(name, width)
             self.value_size += width
 
@@ -165,11 +171,14 @@ class RowElementByte(object):
     def keys(self):
         return list(self.fields.keys())
 
-    def field_values(self):
-        return list(self.fields.values())
-
     def values(self):
         return [field.value for field in self.fields.values()]
+
+    def items(self):
+        return dict(zip(self.keys(), self.values()))
+
+    def field_values(self):
+        return list(self.fields.values())
 
     def add_field(self, name, width):
         if name not in self.fields.keys():
@@ -219,16 +228,38 @@ class RowElementByte(object):
 class PageElementMmap(object):
 
     class RowDesc(object):
+        ROW_IDX_ELEM_SIZE = 2
+        (I_ROW_NO, I_ROW_NAME) = range(ROW_IDX_ELEM_SIZE)
+
+        RSV_IDX_NAME = 'Reserved'
+        RSV_DATA_NAME = 'RSV'
+
         def __init__(self, idx, content):
-            self.idx = idx
-            self.content = content
+            self.i_content = idx
+            self.d_content = content
 
-        def __iter__(self):
-            # print(self.__class__.__name__, self.__rows_mm)
-            return iter(self.content)
+        # def __iter__(self):
+        #     # print(self.__class__.__name__, self.__rows_mm)
+        #     return iter(self.content)
 
-        def __getitem__(self, key):
-            return self.content[key]
+        # def __getitem__(self, key):
+        #     return self.content[key]
+
+        def no(self):
+            if self.i_content and len(self.i_content) > self.I_ROW_NO:
+                name, _ = self.i_content[self.I_ROW_NO]
+                return name
+
+        def name(self):
+            if self.i_content and len(self.i_content) > self.I_ROW_NAME:
+                name, _ = self.i_content[self.I_ROW_NAME]
+                return name
+
+        def idx_content(self):
+            return self.i_content
+
+        def data_content(self):
+            return self.d_content
 
     class PageDesc(object):
         def __init__(self, row_title=None, extra_info=None):
@@ -321,8 +352,8 @@ class PageElementMmap(object):
         return self.value_size
 
     def set_values(self, values):
-        assert len(values) == self.value_size, \
-            "values length mismatch({} {}):({})".format(len(values), self.value_size, values)
+        if len(values) != self.value_size:
+            print("values length mismatch({} {}):({})".format(len(values), self.value_size, values))
 
         self.__values = values[:self.value_size]
         for i, row_elem in enumerate(self.__rows_mm):
@@ -347,24 +378,24 @@ class PageElementMmap(object):
                 values.append(val)
         return values
 
-    def select(self, row_idx, field_name=None):
-        if row_idx < len(self.__rows_mm):
-            row_elem = self.__rows_mm[row_idx]
+    # def select(self, row_idx, field_name=None):
+    #     if row_idx < len(self.__rows_mm):
+    #         row_elem = self.__rows_mm[row_idx]
+    #
+    #         if field_name is None:
+    #             return row_elem.get_value()
+    #         else:
+    #             return row_elem.get_field(field_name)
 
-            if field_name is None:
-                return row_elem.get_value()
-            else:
-                return row_elem.get_field(field_name)
-
-    def select_idx(self, row_idx, col_idx=None):
-        if row_idx < len(self.__rows_mm):
-            row_elem = self.__rows_mm[row_idx]
-
-            #print(self.__class__.__name__, row_elem)
-            if col_idx is None:
-                return row_elem.get_value()
-            else:
-                return row_elem.get_field_by_idx(col_idx)
+    # def select_idx(self, row_idx, col_idx=None):
+    #     if row_idx < len(self.__rows_mm):
+    #         row_elem = self.__rows_mm[row_idx]
+    #
+    #         #print(self.__class__.__name__, row_elem)
+    #         if col_idx is None:
+    #             return row_elem.get_value()
+    #         else:
+    #             return row_elem.get_field_by_idx(col_idx)
 
     def search(self, field_name):
         for row_elem in self.__rows_mm:
@@ -372,8 +403,8 @@ class PageElementMmap(object):
             if value is not None:
                 return value
 
-    def row(self, row_id):
-        return self.__rows_mm[row_id]
+    # def row(self, row_id):
+    #     return self.__rows_mm[row_id]
 
 class Page0Mem(PageElementMmap):
     PAGE_ID = Page.ID_INFORMATION
@@ -465,7 +496,6 @@ class PagesMemoryMap(object):
     PATTERN_CONFIG_TABLE_NAME = re.compile("Configuration for [A-Z_]+(\d+)( Instance (\d))?")
     PATTERN_MESSAGE_TABLE_NAME = re.compile("Message Data for [A-Z_]+(\d+)( – (.*))?")
     MESSAGE_EXTRA_INFO_TABLE = {100: ["First Report ID", "Second Report ID", "Subsequent Touch Report IDs"]}
-    SIZE_ROW_IDX_ELEM = 2
 
     SKIP_CONFIG_DESC = [117, 37, 5, 68, 71, 25, 56, 110]
     SKIP_MESSAGE_DESC = []
@@ -498,19 +528,26 @@ class PagesMemoryMap(object):
 
     def _parse_desc(self, table, size, fn_check_result, pat_name):
         RSV_NAME = ('rsv', 'reserved')
-        def replace_rsv(row_elem, old, new, seq):
+        def add_seq_replace_rsv(row_elem, old, new, r_seq, e_seq=None):
             for i in range(len(row_elem)):
                 elem = row_elem[i]
                 if elem[0].lower() in old:
-                    elem[0] = new + str(seq)
-                    seq += 1
-            return seq
+                    elem[0] = new + str(r_seq)
+                    r_seq += 1
+                else:
+                    if e_seq is not None:
+                        c = elem[0][-1]
+                        if not (c >= '0' and c <= '9'):
+                            elem[0] = "%s %d" % (elem[0], e_seq)
+
+            return r_seq
 
         if not table:
             return
 
-        split_row_content = lambda row_value: (row_value[:self.SIZE_ROW_IDX_ELEM], row_value[self.SIZE_ROW_IDX_ELEM:])
+        split_row_content = lambda row_value: (row_value[:PageElementMmap.RowDesc.ROW_IDX_ELEM_SIZE], row_value[PageElementMmap.RowDesc.ROW_IDX_ELEM_SIZE:])
         get_row_id = lambda idx: idx[0]
+        get_row_idx_content = lambda idx: idx[1:]
         get_data_elem_length = lambda elem: sum(map(lambda e: e[1], elem))
         seq_i = seq_e = 0
 
@@ -523,28 +560,33 @@ class PagesMemoryMap(object):
                 desc = PageElementMmap.PageDesc(title, extra)
                 length_row_title = get_data_elem_length(title[1])
                 for i in range(1, len(v)):
-                    idx, elem = split_row_content(v[i])
+                    idx, elem = split_row_content(v[i]) #row elem
                     length = get_data_elem_length(elem)
                     if length != length_row_title:
                         print("Skip not integrity desc:", v[i])
                         elem = (('TBD', 8),)
-                    row_id = get_row_id(idx)
-                    result = re.split('[–-]', row_id[0])
+                    row_idx_id_no, _ = get_row_id(idx)
+                    result = re.split('[–-]', row_idx_id_no)
                     if len(result) > 1:
                         try:
                             st, end = map(int, result)
-                            for id in range(st, end + 1):
-                                idx_new = [(str(id), row_id[1])]
-                                idx_new.extend(idx[1:])
-                                seq_i = replace_rsv(idx_new, RSV_NAME, 'Reserved', seq_i)
-                                seq_e = replace_rsv(elem, RSV_NAME, 'RSV ', seq_e)
+                            for j in range(st, end + 1):
+                                v_new = copy.deepcopy(v[i]) # need a copy for adjust index
+                                idx, elem = split_row_content(v_new)
+                                _, row_idx_id_name = get_row_id(idx)
+                                row_idx_data = get_row_idx_content(idx)
+                                seq_i = add_seq_replace_rsv(row_idx_data, RSV_NAME, PageElementMmap.RowDesc.RSV_IDX_NAME, seq_i, j - st)
+                                seq_e = add_seq_replace_rsv(elem, RSV_NAME, PageElementMmap.RowDesc.RSV_DATA_NAME, seq_e, j - st)
+                                idx_new = [(str(j), row_idx_id_name)]
+                                idx_new.extend(row_idx_data)
                                 desc.add_content(idx_new, elem)
+                                print(idx_new, elem)
                         except:
                             print("Falied split row id:", v[i])
                             break
                     else:
-                        seq_i = replace_rsv(idx, RSV_NAME, 'Reserved', seq_i)
-                        seq_e = replace_rsv(elem, RSV_NAME, 'RSV ', seq_e)
+                        seq_i = add_seq_replace_rsv(idx, RSV_NAME, PageElementMmap.RowDesc.RSV_IDX_NAME, seq_i)
+                        seq_e = add_seq_replace_rsv(elem, RSV_NAME, PageElementMmap.RowDesc.RSV_DATA_NAME, seq_e)
                         desc.add_content(idx, elem)
 
                 if size is not None:

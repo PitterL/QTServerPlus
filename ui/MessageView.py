@@ -2,14 +2,23 @@ from kivy.clock import Clock
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.scrollview import ScrollView
 from kivy.uix.layout import Layout
 from kivy.uix.label import Label
 from kivy.uix.button import Button
-from kivy.uix.togglebutton import ToggleButton
+from kivy.uix.textinput import TextInput
+from kivy.uix.codeinput import CodeInput
+from kivy.uix.togglebutton import ToggleButton, ToggleButtonBehavior
+from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.tabbedpanel import TabbedPanelHeader, TabbedPanelItem
+from kivy.properties import ListProperty, StringProperty
+import kivy.utils as utils
 
-from ui.WidgetExt import Action, PropAction, ActionEvent, LayerActionWrapper, LayerBoxLayout
-from ui.WidgetExt import LayerBehavior, ActionEvent, ActionEventWrapper
+from tools.tree import mTree
+from tools.mem import PageElementMmap
+from ui.WidgetExt import Action, PropAction, ValueAction, LayerActionWrapper, LayerBoxLayout
+from ui.WidgetExt import LayerBehavior, ActionEvent,  ActionEventWrapper
+from ui.WidgetExt import KeyboardShotcut
 from ui.TableElement import WidgetPageLayout
 from ui.TableElement import WidgetPageContentRecycleElement
 from ui.TableElement import WidgetPageContentTitleElement, WidgetPageContentDataElement
@@ -21,6 +30,8 @@ from ui.PageElement import PageContext, WidgetPageMultiInstElement, WidgetPageEl
 
 from collections import OrderedDict
 import time
+from hashlib import md5
+import array, struct
 
 class WidgetRepoElement(ActionEventWrapper, TabbedPanelItem):
     PAGE_CLS_LAYOUT_TABLE = {
@@ -92,6 +103,11 @@ class WidgetRepoElement(ActionEventWrapper, TabbedPanelItem):
         else:
             name = "{}".format(st)
         return name
+
+    def on_action(self, inst, act):
+        if inst != self:
+            action = Action.parse(act, rid=tuple(self.repo_tab.keys()))
+            self.action = action
 
 class WidgetRepoMultiInstElement(WidgetPageMultiInstElement):
     def switch_tab(self):
@@ -171,29 +187,190 @@ class MessageSettingContent(PageContext):
         # else:
         # return widget
 
-class MessageTextContent(LayerActionWrapper, Label):
+class MessageTextLabel(LayerActionWrapper, CodeInput):
+    #default text color
+    color = ListProperty([])
+
+    #bold font
+    font_name_bold = StringProperty([])
+
     NAME = 'Message'
 
-    # def __init__(self, **kwargs):
-    #     super(MessageTextContent, self).__init__(**kwargs)
+    MAX_LISTED_MESSAGE = 20
 
-        #
-    # def __init__(self):
-    #     super(MessageTextContent, self).__init__()
+    class MsgFormat(object):
+        def __init__(self, msgc, **param):
+            self.m = msgc
+            self.param = param
 
-# class MessageView(LayerBoxLayout):
-#     def __init__(self):
-#         super(MessageView, self).__init__()
-#         self.add_layer('setting', MessageSettingBar())
-#         self.add_layer('setting', MessageContentElement())
+        def set_decorate(self, **kwargs):
+            for k, v in kwargs:
+                self.param[k] = v
 
-class WidgetMsgCtrlButton(ActionEvent, ToggleButton):
+        def head(self):
+            major = self.m.major
+            minor = self.m.minor
+            parent_inst = self.m.parent_inst
+            if parent_inst > 1:
+                text_head = '[{}-{}]'.format(major, minor)
+            else:
+                text_head = '[{}]'.format(major)
+
+            param = self.param.get('head')
+            text_head = self.decorate(text_head, param)
+
+            return text_head
+
+        def body(self):
+            content = []
+            param = self.param.get('body')
+            if param:
+                param_n, param_v, param_t = param
+            else:
+                param_n = param_v = param_t = None
+
+            for k, v in self.m.data.items():
+                name = self.decorate(k, param_n)
+                value = self.decorate(v, param_v)
+                div = self.decorate('=', param_t)
+                content.append(name + div + value)
+
+            div = self.decorate(', ', param_t)
+            text_body = div.join(content)
+
+            return text_body
+
+        def tail(self):
+            param = self.param.get('head')
+            text = '<{}>'.format(self.m.rid)
+            text_tail = self.decorate(text, param)
+            return text_tail
+
+        def decorate(self, v, param):
+            text = str(v)
+            if not param:
+                return text
+
+            st = []
+            end = []
+            for n, v in param.items():
+                if v is not None:
+                    dc_s = '[{}={}]'.format(n, v)
+                else:
+                    dc_s = '[{}]'.format(n)
+                dc_e = '[/{}]'.format(n)
+                st.append(dc_s)
+                end.append(dc_e)
+
+            return ''.join(st) + text + ''.join(end)
+
+        def output(self):
+            return ' '.join([self.head(), self.body(), self.tail()])
+
+    def __init__(self, **kwargs):
+        ##markup=True,
+        super(MessageTextLabel, self).__init__(**kwargs)
+        self._cached_text = []
+
+    def max_msg_count(self):
+        return self.MAX_LISTED_MESSAGE
+
+    def render(self, msgc):
+        default_color = utils.get_hex_from_color(self.color)
+        message_color = utils.get_hex_from_color(msgc.color)
+        # param = {'head':{ 'color': default_color},
+        #          'body':({'color': message_color, 'font':self.font_name_bold}, {'color': message_color}, {'color': default_color}),
+        #          'tail':{'color': self.color}}
+        param = {}
+        ft_msg = MessageTextLabel.MsgFormat(msgc, **param)
+        text = ft_msg.output()
+        if text:
+            self._cached_text.append(text)
+
+    def render_end(self):
+        if self._cached_text:
+            self.text = '\n'.join(self._cached_text)
+            self._cached_text = []
+
+class MessageTextContent(ActionEventWrapper, ScrollView):
+    NAME = 'Message'
+    class MsgContent(object):
+        def __init__(self, *args):
+            major, minor, parent_inst, rid, color, data = args
+            self.major = major
+            self.minor = minor
+            self.parent_inst = parent_inst
+            self.rid = rid
+            self.color = color
+            self.data = data
+
+    def __init__(self, **kwargs):
+        super(MessageTextContent, self).__init__(**kwargs)
+        self.add_widget(MessageTextLabel())
+#
+# root = ScrollView(size_hint=(None, None), size=(500, 320),
+#                 pos_hint={'center_x': .5, 'center_y': .5}, do_scroll_x=False)
+
+    def max_msg_count(self):
+        if self.children:
+            layout = self.children[0]
+            return layout.max_msg_count()
+
+        return 0
+
+    def render(self, msgc):
+        if self.children:
+            layout = self.children[0]
+            return layout.render(msgc)
+
+    def render_end(self):
+        if self.children:
+            layout = self.children[0]
+            return layout.render_end()
+
+class WidgetMsgBaseButton(ButtonBehavior, Label):
+    pass
+
+class WidgetMsgCtrlButton(ActionEvent, ToggleButtonBehavior, WidgetMsgBaseButton):
+    #default border size
+    border_default = ListProperty([])
+
+    #button pressed border size
+    border_active = ListProperty([])
+
+    #default border color
+    border_color_default = ListProperty([])
+
+    #button pressed border size
+    border_color_active = ListProperty([])
+
     def __init__(self, name):
-        super(WidgetMsgCtrlButton, self).__init__()
-        self.text = name
+        self._name = name
+        self.border_color_active = self._hash_color()
+        super(WidgetMsgCtrlButton, self).__init__(text=name)
+
+    def _hash_color(self):
+        #here general the color for the button by hash map, you could any other method
+        try:
+            value = int(self._name)
+        except:
+            value = 0
+
+        words = array.array('b', [value])
+        hash = md5()
+        hash.update(words)
+        value = hash.digest()
+        data = struct.unpack_from('BBB', value)
+
+        r, g, b = [ v / 255 for v in data]
+
+        return (r, g, b, 1)
+
+    def name(self):
+        return self._name
 
     def write(self, value):
-        action = PropAction(name=self.text, value=value, time=time.time())
+        action = PropAction(name=self.text, value=value, color=self.border_color_active, time=time.time())
         print(self.__class__.__name__, "write", action)
         self.action = action
 
@@ -201,45 +378,84 @@ class WidgetMsgCtrlButton(ActionEvent, ToggleButton):
         print(self.__class__.__name__, inst, state)
         #self.action = {'name':'ctrl', 'id': self.text, 'state':value}
         if state == 'down':
+            self.border_color = self.border_color_active
+            self.border = self.border_active
             val = True
         else:
+            self.border_color = self.border_color_default
+            self.border = self.border_default
             val = False
 
         self.write(val)
 
-    # def on_focus(self, inst, value):
-    #     print(self.__class__.__name__, inst, value)
+    def on_disposal(self, inst, disposal):
+        if inst != self:
+            target_name = disposal.get('target')
+            widget_name = disposal.get('widget')
+            name = disposal.get('name')
+            value = disposal.get('value')
+            v = self.property(name, True)
+            if v and widget_name == self.__class__.__name__ and \
+                    (target_name == self.name() or target_name == '-'):
+                    v.set(self, value)
+                    print(self.__class__.__name__, 'state', self.state, v)
 
-class WidgetMsgSwitchButton(ActionEvent, Button):
+class WidgetMsgSwitchButton(ActionEvent, WidgetMsgBaseButton):
     def __init__(self, props):
         self.props = props
         self.curr = 0
         super(WidgetMsgSwitchButton, self).__init__(text=props[0])
 
-    def next_curr(self):
-        self.curr += 1
-        self.curr %= len(self.props)
-        return self.curr
+    def next_curr(self, curr=None):
+        if curr is None:
+            curr = self.curr + 1
+        curr %= len(self.props)
+        self.curr = curr
+        return curr
 
-    def switch(self):
-        curr = self.next_curr()
+    def switch(self, curr=None):
+        curr = self.next_curr(curr)
         self.text = self.props[curr]
-
 
     def write(self):
         for i, s in enumerate(self.props):
-            if i != self.curr:
+            if i == self.curr:
+                action = PropAction(name=s, value=True, time=time.time())
+            else:
                 action = PropAction(name=s, value=False, time=time.time())
-                print(self.__class__.__name__, "write", action)
-                self.action = action
-
-        action = PropAction(name=self.text, value=True, time=time.time())
-        print(self.__class__.__name__, "write", action)
-        self.action = action
+            print(self.__class__.__name__, "write", action)
+            self.action = action
 
     def on_release(self):
-            self.switch()
-            self.write()
+        self.switch()
+        self.write()
+
+class WidgetMsgRegAllButton(WidgetMsgSwitchButton):
+    NAME = 'reg_all'
+
+    selected = StringProperty('')
+
+    def name(self):
+        return self.NAME
+
+    def on_selected(self, inst, selected):
+        for i, prop in enumerate(self.props):
+            if prop == selected:
+                self.switch(i)
+                self.write()
+                break
+
+    def on_disposal(self, inst, disposal):
+        if inst != self:
+            target_name = disposal.get('target')
+            widget_name = disposal.get('widget')
+            name = disposal.get('name')
+            value = disposal.get('value')
+            v = self.property(name, True)
+            if v and widget_name == self.__class__.__name__ and \
+                    (target_name == self.name() or target_name == '-'):
+                    v.set(self, value)
+                    print(self.__class__.__name__, 'state', self.state, v)
 
 class MessageBaseControlBar(LayerBoxLayout):
 
@@ -261,14 +477,114 @@ class MessageGlobelControlBar(MessageBaseControlBar):
 
 class MessageRegControlBar(MessageBaseControlBar):
     NAME = 'ctrl_r'
-    CTRL_LIST = ('All',)
+    REG_ALL = 'All'
+    REG_CLR = 'Clr'
+    CTRL_LIST = ((REG_CLR, REG_ALL),)  #name, state
     def __init__(self, **kwargs):
-        super(MessageRegControlBar, self).__init__(self.NAME, self.CTRL_LIST, WidgetMsgCtrlButton, **kwargs)
+        super(MessageRegControlBar, self).__init__(self.NAME, self.CTRL_LIST, WidgetMsgRegAllButton, **kwargs)
 
     def create_repo_element(self, repo_insts):
         repo_mm = repo_insts[0]
         major, _ = repo_mm.page_id()
+        seq = self.count()
         self.add_layer(major, WidgetMsgCtrlButton(str(major)))
+
+    def cast(self, **kwargs):
+        disposal = ValueAction(**kwargs, time=time.time())
+        print(self.__class__.__name__, "cast", disposal)
+        self.disposal = disposal
+
+    def on_action(self, inst, act):
+        if inst != self:
+            print(self.__class__.__name__, inst, act)
+            action = Action.parse(act, id=self._name)
+            if action.is_event('prop'):
+                if isinstance(inst, WidgetMsgRegAllButton):
+                    name = action.get('name')
+                    value = action.get('value')
+                    if value:
+                        if name == MessageRegControlBar.REG_ALL:
+                            kwargs = dict(name='state', value='down', target='-', widget='WidgetMsgCtrlButton')
+                            self.cast(**kwargs)
+                        elif name == MessageRegControlBar.REG_CLR:
+                            kwargs = dict(name='state', value='normal', target='-', widget='WidgetMsgCtrlButton')
+                            self.cast(**kwargs)
+                else:
+                    self.action = action
+
+class MessageProc():
+    COMBINE_WORDS = {'lsbits': 0, 'lsbyte': 0, 'msbyte': 1 }
+
+    def __init__(self):
+        self._data = {}
+        self._compound = {}
+
+    def save_compound_value(self, field_name, field, row_name, row_fields_num):
+        def get_name(words, name):
+            for word in words:  #word: 'Current X Position', name 'XPos' is match
+                w = word.lower().replace(' ', '')
+                n = name.lower().replace(' ', '')
+                if n in w or w in n:
+                    return word
+            return name
+
+        #compond value
+        result = field_name.rsplit(maxsplit=1)
+        if len(result) == 2:
+            main, suffix = result
+            tag = suffix.lower()
+            if tag in self.COMBINE_WORDS.keys():    #suffix in list
+                #if main not in self._compound:
+                name = get_name(self._compound.keys(), main)
+                if name not in self._compound.keys():
+                    self._compound[name] = []
+                k = self.COMBINE_WORDS[tag]
+                v = (row_name, field) #order as key
+                self._compound[name].append((k, v))
+                return True
+
+    def _process_compound(self):
+        for main, v in self._compound.items():
+            if not v:
+                continue
+
+            value = 0
+            ns = set()  #check whether row_name is same
+            for (_, data) in sorted(v, reverse=True):
+                row_name, field = data
+                value <<= field.width
+                value += field.value
+
+                result = row_name.rsplit(maxsplit=1)    #e.g. row name is 'XPOS 1'
+                if result[-1].isdigit():
+                    row_name = result[0]
+
+                ns.add(row_name)
+
+            if len(ns) < len(v):
+                name = ns.pop() #use row name
+            else:
+                name = main #if row name is not same, use main name
+
+            self._data[name] = value
+
+    def save_value(self, field_name, field, row_name, row_fields_num):
+        #normal value
+        if row_fields_num == 1:
+            name = row_name
+        else:
+            name = field_name
+        self._data[name] = field.value
+
+    #field_name, field, row_name, row_fields_num
+    def push(self, *args):
+        result = self.save_compound_value(*args)
+        if not result:
+            self.save_value(*args)
+
+    def output(self):
+        self._process_compound()
+        return self._data.copy()
 
 class MessageContent(LayerBehavior, ActionEventWrapper, BoxLayout):
     NAME = 'Content'
@@ -285,13 +601,24 @@ class MessageContent(LayerBehavior, ActionEventWrapper, BoxLayout):
             if state:
                 self.insert(cls.NAME)
 
-        # self.add_layer('setting', MessageSettingContent())
-        # self.add_layer('text', MessageTextContent())
+        self.repo_mmap = {}
+        self.raw_data = []
+        self.filter = dict(reg=dict(), rid=dict())
 
     def create_repo_element(self, repo_insts):
         for layer in self.get_layers():
             if hasattr(layer, 'create_repo_element'):
                 layer.create_repo_element(repo_insts)
+
+    def set_repo_mmap_tab(self, mmap):
+        self.repo_mmap.update(mmap)
+
+    def get_repo_mmap_tab(self, rid=None):
+        if rid is not None:
+            if rid in self.repo_mmap.keys():
+                return self.repo_mmap[rid]
+        else:
+            return self.repo_mmap
 
     def change_bar_status(self, name):
         if name in self._cls_bar_list.keys():
@@ -301,7 +628,7 @@ class MessageContent(LayerBehavior, ActionEventWrapper, BoxLayout):
 
     def insert(self, name):
         layer = self.get_layer(name)
-        if layer is not None:
+        if layer:
             if not layer.parent:
                 self.add_widget(layer)
                 if hasattr(layer, 'insert_cb'):
@@ -309,48 +636,182 @@ class MessageContent(LayerBehavior, ActionEventWrapper, BoxLayout):
 
     def remove(self, name):
         layer = self.get_layer(name)
-        if layer is not None:
+        if layer:
             if layer in self.children:
                 self.remove_widget(layer)
 
-    def on_size(self, inst, size):
-        print(self.__class__.__name__, inst, size)
+    def _save_data(self, data):
+        self.raw_data.append(data)
+
+    def _parse_data(self, data):
+        #print(self.__class__.__name__, "parse data", data)
+
+        rid = data[0]
+        msg_mm = self.get_repo_mmap_tab(rid)
+        if not msg_mm:
+            print(self.__class__.__name__, "Unknown data", data)
+            return
+
+        size = msg_mm.get_value_size()
+        msg_mm.set_values(data[1: size + 1])
+
+        major, minor = msg_mm.page_id()
+        parent_inst = msg_mm.parent_inst()
+        p = MessageProc()
+        #print(self.__class__.__name__, "parse data", major, minor, data)
+
+        # reg control bar is enabled
+        branch = ('all', str(major))
+        #print(self.__class__.__name__, self.filter)
+        data = mTree.get_nested_leaf_value(self.filter, ('reg', branch))
+        if data:
+            enabled, color = data
+            if not enabled:
+                return
+
+            for i, row_elem in enumerate(msg_mm):
+                idx_name = row_elem.desc.name()
+                # rid row disable bit if off
+                if not mTree.get_leaf_value(
+                        self.filter, ('rid', rid, WidgetRowIndexElement.NAME, i, idx_name)):
+
+                    for name, field in row_elem:
+                        # rid field disable bit is off
+                        if name.startswith(PageElementMmap.RowDesc.RSV_DATA_NAME):
+                            continue
+
+                        if not mTree.get_leaf_value(
+                                self.filter, ('rid', rid, WidgetRowDataElement.NAME, i, field.value)):
+                            # if len(row_elem) > 1:
+                            #     msg_out[name] = field.value
+                            # else:
+                            #     msg_out[idx_name] = field.value
+                            # field_name, field, row_name, row_fields_num
+                            p.push(name, field, idx_name, len(row_elem))
+
+        msg_out = p.output()
+        return MessageTextContent.MsgContent(major, minor, parent_inst, rid, color, msg_out)
+
+    def render(self):
+        layer = self.get_layer(MessageTextContent.NAME)
+        assert layer
+
+        for data in self.raw_data[-layer.max_msg_count():]:
+            msgc = self._parse_data(data)
+            if msgc:
+                layer.render(msgc)
+        layer.render_end()
+
+    def handle_data(self, data):
+        self._save_data(data)
+        self.render()
+
+    def set_reg_filter(self, kwargs):
+        #reg_filter = self.filter['reg']
+
+        name = kwargs.get('name')
+        value = kwargs.get('value')
+        color = kwargs.get('color')
+
+        mTree.build(self.filter, ('reg', name, (value, color)))
+
+    def set_rid_filter(self, kwargs):
+        #rid_filter = self.filter['rid']
+
+        rid = kwargs.get('rid')
+        zone = kwargs.get('zone')
+        row = kwargs.get('row')
+        name = kwargs.get('name')
+        value = kwargs.get('value')
+        col = kwargs.get('col')
+
+        mTree.build(self.filter, ('rid', rid, zone, row, name, value))
+
+    def on_event_control_bar(self, event):
+        name = event.get('name')
+        value = event.get('value')
+
+        if name in self.get_layer_names():
+            if value:
+                self.insert(name)
+            else:
+                self.remove(name)
+
+    def on_event_reg_bar(self, event):
+        self.set_reg_filter(event)
+
+    def on_event_setting_content(self, event):
+        self.set_rid_filter(event)
 
     def on_action(self, inst, act):
         if inst != self:
+            print(self.__class__.__name__, inst, act)
             action = Action.parse(act)
             if action.is_event('prop'):
-                if action.is_id('ctrl_g'):
-                    name = action.get('name')
-                    value = action.get('value')
-                    if name in self.get_layer_names():
-                        if value:
-                            self.insert(name)
-                        else:
-                            self.remove(name)
-
-            self.action = action
+                if action.is_id(MessageGlobelControlBar.NAME):
+                    self.on_event_control_bar(action)
+                elif action.is_id(MessageRegControlBar.NAME):
+                    self.on_event_reg_bar(action)
+                elif action.is_id(MessageSettingContent.NAME):
+                    self.on_event_setting_content(action)
+            #self.action = action
 
 class MessageView(LayerActionWrapper, FloatLayout):
+    KeyEvent = {
+        'ctrl_m': (109, 'ctrl'),  # ctrl + d
+        'esc': (27, None)}  # esc
+
     def __init__(self, **kwargs):
         super(MessageView, self).__init__(**kwargs)
         self.add_layer(MessageContent.NAME, MessageContent())
 
     @staticmethod
     def register_message_view():
-        return MessageView()
+        view = MessageView()
+        for name, key in MessageView.KeyEvent.items():
+            watch = key + (MessageView._on_keyboard_down,)
+            KeyboardShotcut.register_keyboard(watch, view, name)
+
+        return view
 
     def create_repo_element(self, repo_insts):
         assert repo_insts
 
-        for layer in self.get_layers():
-            if hasattr(layer, 'create_repo_element'):
-                layer.create_repo_element(repo_insts)
+        # for layer in self.get_layers():
+        #     if hasattr(layer, 'create_repo_element'):
+        #         layer.create_repo_element(repo_insts)
+        layer = self.get_layer(MessageContent.NAME)
+        if layer:
+            layer.create_repo_element(repo_insts)
 
-    def handle_data(self, msg_mm):
-        assert msg_mm
-        layer = self.get_child_layer([MessageContent.NAME, MessageSettingContent.NAME])
+    def set_repo_mmap_tab(self, mmap):
+        layer = self.get_layer(MessageContent.NAME)
+        if layer:
+            layer.set_repo_mmap_tab(mmap)
 
+    def handle_data(self, data):
+        assert(data)
+
+        layer = self.get_layer(MessageContent.NAME)
+        if layer:
+            layer.handle_data(data)
+
+    @staticmethod
+    def _on_keyboard_down(root, inst, event):
+        if event == 'ctrl_m':
+            activated = inst not in root.children
+        elif event == 'esc':
+            activated = False
+
+        if activated:
+            root.add_widget(inst)
+        else:
+            root.remove_widget(inst)
+
+    def cast(self, **kwargs):
+        disposal = ValueAction(**kwargs, time=time.time())
+        print(self.__class__.__name__, "cast", disposal)
+        self.disposal = disposal
 
 if __name__ == '__main__':
     import array, os
@@ -371,6 +832,7 @@ if __name__ == '__main__':
             #inspector.create_inspector(Window, root)
             #return root
 
+            KeyboardShotcut()
             root = MessageView.register_message_view()
             v_chip_id = array.array('B', [164, 24, 16, 170, 32, 20, 40])
             chip = ChipMemoryMap.get_chip_mmap(v_chip_id)

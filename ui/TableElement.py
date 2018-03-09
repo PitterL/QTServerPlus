@@ -426,6 +426,7 @@ class WidgetFieldIndexElement(WidgetFieldElement):
             self.size_hint_x = self.idx_size_hint
 
 class WidgetRowIndexElement(LayerBoxLayout):
+    NAME = 'idx'
     # def get_prop(self):
     #     properties = {}
     #     for layer in self:
@@ -436,10 +437,11 @@ class WidgetRowIndexElement(LayerBoxLayout):
 
     def on_action(self, inst, act):
         if inst != self:
-            action = Action.parse(act, zone='idx')
+            action = Action.parse(act, zone=self.NAME)
             self.action = action
 
 class WidgetRowDataElement(LayerBoxLayout):
+    NAME = 'data'
     # def get_prop(self):
     #     properties = {}
     #     for layer in self:
@@ -449,7 +451,7 @@ class WidgetRowDataElement(LayerBoxLayout):
     #     return properties
     def on_action(self, inst, act):
         if inst != self:
-            action = Action.parse(act, zone='data')
+            action = Action.parse(act, zone=self.NAME)
             self.action = action
 
 class WidgetRowElementBase(RecycleDataViewBehavior, LayerBoxLayout):
@@ -527,7 +529,7 @@ class WidgetRowElement(WidgetRowElementBase):
 
         v_kwargs = kwargs.get('view_kwargs')
         page_id = v_kwargs.get('page_id')
-        self.row = row_id = v_kwargs.get('row_id')
+        row_id = v_kwargs.get('row_id')
         row_elem = v_kwargs.get('row_elem')
         self.row_elem = row_elem
 
@@ -542,10 +544,10 @@ class WidgetRowElement(WidgetRowElementBase):
 
         # idx content
         if cls_row_idx:
-            if row_elem.idx_desc:
+            if row_elem.desc.idx_content():
                 #self.add_layer(self.CHILD_ELEM_INDEX, cls_row_idx())
                 parent = cls_row_idx()
-                for j, desc in enumerate(row_elem.idx_desc):
+                for j, desc in enumerate(row_elem.desc.idx_content()):
                     if desc:
                         name, _= desc
                         w_field = self.create_field_element(col_idx=j, name=name, cls_kwargs=cls_idx_field)
@@ -605,7 +607,7 @@ class WidgetRowElement(WidgetRowElementBase):
 
     def on_action(self, inst, act):
         if inst != self:
-            action = Action.parse(act, row=self.row)
+            action = Action.parse(act, row=self.row_id())
             if action.is_event('value'):
                 if action.is_op('w'):
                     self.__writeback_cache(**action)

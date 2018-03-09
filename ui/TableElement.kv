@@ -4,12 +4,6 @@
     halign: 'center'
     valign: 'middle'
     canvas.before:
-        BorderImage:
-            # BorderImage behaves like the CSS BorderImage
-            border: 1, 1, 1, 1
-            source: 'image/background_border1.png'
-            pos: self.pos
-            size: self.size
         Color:
             rgba: self.border_color
         Rectangle:
@@ -71,7 +65,7 @@
     background_down: self.pg_active
     pg_error: "image/background_error.png"
     pg_active: "image/background_down.png"
-    pg_normal: "image/background_border.png"
+    pg_normal: "image/background_normal.png"
 
 <WidgetFieldIndexButtonName>
     #height: DEFAULT_LABLE_SIZE
@@ -105,7 +99,7 @@
     #use_handles: False
     pg_error: "image/background_error.png"
     pg_active: "image/background_active.png"
-    pg_normal: "image/background_border.png"
+    pg_normal: "image/background_normal.png"
 
 <WidgetFieldElement>
     orientation:'vertical'

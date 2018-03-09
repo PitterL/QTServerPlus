@@ -3,19 +3,56 @@
     background_normal: 'atlas://data/images/defaulttheme/action_item'
     background_down: 'atlas://data/images/defaulttheme/action_item_down'
 
-<WidgetMsgSwitchButton>
-    size_hint: None, None
-    width: 70 if self.width >= 70 else self.width
-    height: 30
+<WidgetMsgBaseButton>
+    halign: 'center'
+    valign: 'middle'
+    canvas.before:
+        Color:
+            rgba: self.border_color
+        Rectangle:
+            # self here refers to the widget i.e BoxLayout
+            pos: self.pos
+            size: self.size
+        Color:
+            rgba: self.background_color
+        Rectangle:
+            # self here refers to the widget i.e BoxLayout
+            pos: self.x + self.border[3], self.y + self.border[2]
+            size: self.width -self.border[1] - self.border[3], self.height - self.border[0] - self.border[2]
 
-<WidgetMsgCtrlButton>
     size_hint: None, None
     width: 50 if self.width >= 50 else self.width
     height: self.width
+    font_name: "font/ARIAL.ttf"
+    font_size: '15sp'
+    bold: False
+    color: 0, 0, 0, 1
+    background_color: 1, 1, 1, 1
+    border_color: 0, 0, 0, 1
+    border_color_default: 0, 0, 0, 1
+    #border_active_color: dynamical generation
+    border: 0.5, 0.5, 0.5, 0.5
+    border_default: 0.5, 0.5, 0.5, 0.5
+    border_active: 3, 3, 3, 3
+
+<WidgetMsgCtrlButton>
 
 <MessageGlobelControlBar>
 
 <MessageRegControlBar>
+
+<MessageTextLabel>
+    halign: 'left'
+    valign: 'top'
+    size_hint_y: None
+    height: self.minimum_height
+    font_name_bold: "font/ARIALBD.ttf"
+    font_name: "font/ARIAL.ttf"
+    font_size: '15sp'
+    text_size: self.size
+    color: 1, 1, 1, 0.8
+
+<MessageTextContent>
 
 <MessageContent>
     orientation: 'vertical'
@@ -23,3 +60,9 @@
     #height: self.minimum_height
 
 <MessageView>
+    canvas.before:
+        Color:
+            rgba: .185, .18, .18, .95
+        Rectangle:
+            pos: self.pos
+            size: self.size

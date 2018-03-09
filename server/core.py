@@ -139,7 +139,7 @@ class LogicDevice(Mm):
                                     addr=cmd_addr + data_size, value=value, page_id=cmd_page_id)
             self.prepare_command(command)
 
-    def handle_raw_data_msg(self, seq, data):
+    def handle_raw_data_msg(self, seq, cmd, data):
         message = ServerMessage(Message.MSG_DEVICE_RAW_DATA, self.id(), seq, value=data['value'])
         self.prepare_message(message)
 

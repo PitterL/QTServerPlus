@@ -179,6 +179,7 @@ class MessageView(LayerBehavior, FloatLayout):
     def add_child_layer_widget(self, child_name_nested, widget):
         layout = super(MessageView, self).add_child_layer(child_name_nested, widget)
         layout.action_bind(widget)
+        layout.disposal_bind(widget)
         layout.add_widget(widget)
 
     def create_message_element(self, repo):
