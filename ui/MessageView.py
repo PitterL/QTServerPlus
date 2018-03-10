@@ -758,7 +758,7 @@ class MessageContent(LayerBehavior, ActionEventWrapper, BoxLayout):
 
 class MessageView(LayerActionWrapper, FloatLayout):
     KeyEvent = {
-        'ctrl_m': (109, 'ctrl'),  # ctrl + d
+        'ctrl_m': (109, ('ctrl',)),  # ctrl + d
         'esc': (27, None)}  # esc
 
     def __init__(self, **kwargs):
@@ -802,11 +802,17 @@ class MessageView(LayerActionWrapper, FloatLayout):
             activated = inst not in root.children
         elif event == 'esc':
             activated = False
+        else:
+            return
 
         if activated:
-            root.add_widget(inst)
+            if inst not in root.children:
+                root.add_widget(inst)
+                return True
         else:
-            root.remove_widget(inst)
+            if inst in root.children:
+                root.remove_widget(inst)
+                return False
 
     def cast(self, **kwargs):
         disposal = ValueAction(**kwargs, time=time.time())

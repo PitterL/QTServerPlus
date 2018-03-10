@@ -3,6 +3,7 @@ kivy.require('1.0.6') # replace with your current kivy version !
 
 #from kivy.lang import Builder
 
+from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.clock import Clock
 
@@ -18,12 +19,13 @@ from tools.mem import ChipMemoryMap
 from ui.DebugView import DebugView
 from ui.MessageView import MessageView
 from ui.WidgetExt import Action, ActionEventWrapper
+from ui.WidgetExt import KeyboardShotcut
 
 class WinError(Exception):
     "Message error exception class type"
     pass
 
-class DeviceWindow(ActionEventWrapper, BoxLayout):
+class DeviceWindow(ActionEventWrapper, RelativeLayout):
     CMD_STACK_DEPTH = 10
     (UP_CONTROL_BAR, DOWN_CONTROL_BAR, LEFT_CONTROL_BAR, right_CONTROL_BAR, CENTER_CONTENT_BAR) = ("up", 'down', 'left', 'right', 'center')
     DEFAULT_MESSAGE_SIZE = 11
@@ -39,6 +41,7 @@ class DeviceWindow(ActionEventWrapper, BoxLayout):
 
         super(DeviceWindow, self).__init__(*args, **kwargs)
 
+        self._keyboard = KeyboardShotcut(win=self)
         self._center = self.ids[DeviceWindow.CENTER_CONTENT_BAR]
         self._center.bind(action=self.on_action)
         self._dbg_view = DebugView.register_debug_view()

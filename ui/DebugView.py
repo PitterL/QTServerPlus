@@ -665,7 +665,7 @@ class DebugView(FloatLayout):
     #history_command = ListProperty('')
 
     KeyEvent = {
-        'ctrl_d':(100, 'ctrl'),   # ctrl + d
+        'ctrl_d':(100, ('ctrl',)),   # ctrl + d
         'esc':(27, None)}  # esc
 
     def __init__(self):
@@ -783,11 +783,17 @@ class DebugView(FloatLayout):
             activated = inst not in root.children
         elif event == 'esc':
             activated = False
+        else:
+            return
 
         if activated:
-            root.add_widget(inst)
+            if inst not in root.children:
+                root.add_widget(inst)
+                return True
         else:
-            root.remove_widget(inst)
+            if inst in root.children:
+                root.remove_widget(inst)
+                return False
 
     @staticmethod
     def register_debug_view():

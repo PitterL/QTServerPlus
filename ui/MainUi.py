@@ -17,13 +17,12 @@ from multiprocessing import Pipe
 from server.message import Message
 from ui.DeviceWindow import DeviceWindow
 #from ui.DebugView import DebugView
-from ui.WidgetExt import KeyboardShotcut
 
 class UiError(Exception):
     "Message error exception class type"
     pass
 
-class MainScreen(KeyboardShotcut, Screen):
+class MainScreen(Screen):
     "Main Screen"
     hue = NumericProperty(0)
     windows = DictProperty({})

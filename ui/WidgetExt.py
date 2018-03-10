@@ -264,22 +264,68 @@ class LayerBoxLayout(LayerBoxLayoutBase):
 
 Factory.register('LayerBoxLayout', cls=LayerBoxLayout)
 
+from collections import OrderedDict
 class KeyboardShotcut(object):
-    WatchLists = {}
+    WatchList = []
     KeyHandle = None
+    Root = None
 
     def __init__(self, **kwargs):
         if not KeyboardShotcut.KeyHandle:
             from kivy.core.window import Window
             KeyboardShotcut.KeyHandle = Window.bind(on_keyboard=KeyboardShotcut.keyboard_shortcut)
+            KeyboardShotcut.Root = kwargs.get('win', Window)
 
-        super(KeyboardShotcut, self).__init__(**kwargs)
+        super(KeyboardShotcut, self).__init__()
 
     @staticmethod
-    def register_keyboard(key_watch_struct, inst, *param):
+    def content(w):
+        return w[1:]
+
+    @staticmethod
+    def order(w):
+        return w[0]
+
+    @classmethod
+    def max_order(cls):
+        _, w = cls.WatchList[0]
+        return cls.order(w)
+
+    @classmethod
+    def set_order(cls, w, i):
+        w[0] = i
+
+    @classmethod
+    def sort_key(cls, b):
+        _, w = b
+        return cls.order(w)
+
+    @classmethod
+    def sort(cls):
+        cls.WatchList.sort(key=cls.sort_key, reverse=True)
+
+
+    @classmethod
+    def add_to_watch(cls, key_watch_struct, inst, *param):
+        name = str(inst)
+        if name not in cls.WatchList:
+            cls.WatchList.append([name,[0]])   #first elem is priority
+
+        for n, row in cls.WatchList:
+            if n == name:
+                row.append((key_watch_struct, inst, param))
+                break
+
+    @classmethod
+    def register_keyboard(cls, key_watch_struct, inst, *param):
         #(scancode, modifiers, callback)
         if len(key_watch_struct) == 3:
-            KeyboardShotcut.WatchLists[key_watch_struct] = (inst, param)
+            #KeyboardShotcut.WatchList.[str(inst)] = [0, (key_watch_struct, param)]
+            cls.add_to_watch(key_watch_struct, inst, *param)
+
+    @staticmethod
+    def set_root_window(win):
+        cls.Root = win
     #
     # def request_keyboard(self, win):
     #     from kivy.core.window import Window
@@ -322,20 +368,33 @@ class KeyboardShotcut(object):
     #             self.activated = False
     #             return True
 
-    @staticmethod
-    def keyboard_shortcut(win, scancode, *largs):
-        #print(self.__class__.__name__, win, scancode, largs)
+    @classmethod
+    def keyboard_shortcut(cls, win, scancode, *largs):
+        #print(win.__class__.__name__, "keyboard", win, scancode, largs)
+
         modifiers = largs[-1]
-        for watch in KeyboardShotcut.WatchLists.items():
-            (code, mod, fn), (inst, param) = watch
-            if scancode == code:
-                if isinstance(mod, (list, tuple)):
-                    if tuple(mod) != tuple(modifiers):
-                        continue
-                else:
-                    if len(modifiers) != 1 or modifiers[0] != mod:
-                        continue
+        for _, watch in cls.WatchList:
+            content = cls.content(watch)
+            for elem in content:
+                (code, mod, fn), inst, param = elem
+                matched = False
+                if scancode == code:
+                    if len(modifiers) >= 1:  #has modifiers
+                        if isinstance(mod, (list, tuple)):
+                            if set(mod) == set(modifiers):
+                                matched = True
+                    else:
+                        if not mod:    #no modifier
+                            matched = True
 
-                fn(win, inst, *param)
-
-        return True
+                    if matched:
+                        result = fn(KeyboardShotcut.Root, inst, *param)
+                        if result is not None:
+                            if result:  # stop dispatch if widget handle it
+                                cls.set_order(watch,
+                                          cls.max_order() + 1)  # first elem is biggest, set me first
+                            else:
+                                cls.set_order(watch, 0)
+                            cls.sort()
+                            print(win, "on_keyboard", KeyboardShotcut.WatchList)
+                            return True
