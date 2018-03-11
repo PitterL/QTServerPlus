@@ -676,7 +676,7 @@ class DebugView(FloatLayout):
 
         command_list = Command.command_format_list()
         self.w_cmd_tree = self.ids['commandtree']
-        for cmd in command_list:
+        for cmd in command_list.keys():
             name = str(cmd)
             widget = TreeViewWidget(text=name)
             cnode = self.w_cmd_tree.add_node(widget)

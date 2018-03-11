@@ -297,8 +297,9 @@ class PageElementMmap(object):
         def add_title(self, idx, content):
             self.title_content.append(PageElementMmap.RowDesc(idx, content))
 
-    def __init__(self, id, page_desc, values, cls_row_elem):
+    def __init__(self, id, addr, page_desc, values, cls_row_elem):
         self.__id = id
+        self._addr = addr
         self.title = []
         self.__rows_mm = []
         self.__values = None
@@ -338,6 +339,8 @@ class PageElementMmap(object):
     # def instance_id(self):
     #     if isinstance(self.id(), tuple):
     #         return self.id()[-1]
+    def address(self):
+        return self._addr
 
     def parent_inst(self):
          return -1
@@ -429,7 +432,7 @@ class Page0Mem(PageElementMmap):
         for r_cont in self.ROWS_MMAP:
             desc.add(r_cont)
 
-        super(Page0Mem, self).__init__(self.PAGE_ID, desc, values, RowElement)
+        super(Page0Mem, self).__init__(self.PAGE_ID, 0, desc, values, RowElement)
 
     def parent_inst(self):
         return -1
@@ -441,7 +444,7 @@ class Page1Mem(PageElementMmap):
     )
     PAGE_TITLE = ((('N',1),), ROW_MMAP)
 
-    def __init__(self, object_num, values=None):
+    def __init__(self, addr, object_num, values=None):
         self.reg_report_table = OrderedDict()   #page_id to repo id map
         desc = PageElementMmap.PageDesc(self.PAGE_TITLE)
         for i in range(object_num):
@@ -449,7 +452,7 @@ class Page1Mem(PageElementMmap):
             desc.add_content((idx,), self.ROW_MMAP)
 
         #self.Mmap * object_num
-        super(Page1Mem, self).__init__(self.PAGE_ID, desc, values, RowElementByte)
+        super(Page1Mem, self).__init__(self.PAGE_ID, addr, desc, values, RowElementByte)
 
     def parent_inst(self):
         return -1
@@ -467,10 +470,10 @@ class Page1Mem(PageElementMmap):
 
 class Page2Mem(PageElementMmap):
 
-    def __init__(self, page_id, parent_inst, desc, values=None):
+    def __init__(self, page_id, addr, parent_inst, desc, values=None):
         self._parent_inst = parent_inst
         #desc = self.load_page_desc(page_id, parent_inst, size)
-        super(Page2Mem, self).__init__(page_id, desc, values, RowElement)
+        super(Page2Mem, self).__init__(page_id, addr, desc, values, RowElement)
 
     def parent_inst(self):
         return self._parent_inst
@@ -478,7 +481,7 @@ class Page2Mem(PageElementMmap):
 class PageMessageMap(PageElementMmap):
 
     def __init__(self, page_id, parent_inst, report_id, report_range, desc):
-        super(PageMessageMap, self).__init__(report_id, desc, None, RowElement)
+        super(PageMessageMap, self).__init__(report_id, None, desc, None, RowElement)
         self._page_id = page_id
         self._parent_inst = parent_inst
         self._report_range = report_range
@@ -512,7 +515,8 @@ class PagesMemoryMap(object):
         #build page 1 memory map table
         object_num = mmem.search('object_num')
         if object_num:
-            mmem = Page1Mem(object_num)
+            addr = mmem.get_value_size() #Page0 size if Page1 offset
+            mmem = Page1Mem(addr, object_num)
             self.set_mem_map(mmem)
 
     def inited(self):
@@ -694,6 +698,7 @@ class PagesMemoryMap(object):
             for n in range(object_num):
                 #print(self.__class__.__name__, data[n * esize: (n + 1) * esize])
                 element = ObjectTableElement(*struct.unpack_from("<BHBBB", data[n * esize: (n + 1) * esize]))
+                addr = element.start_address
                 inst = element.instances_minus_one + 1
                 num_repo = element.num_report_ids
                 # if num_repo:
@@ -702,7 +707,7 @@ class PagesMemoryMap(object):
                     page_id = (element.type, i)
                     size = element.size_minus_one + 1
                     desc = self.load_page_mem_desc(page_id, inst, size)
-                    mmem = Page2Mem(page_id, inst, desc)
+                    mmem = Page2Mem(page_id, addr, inst, desc)
                     self.set_mem_map(mmem)
                     if num_repo:
                         inst_repo_range = (repo_st, repo_st + num_repo - 1)
@@ -737,9 +742,9 @@ class ChipMemoryMap(object):
             return cls.CHIP_TABLE[cid]
         else:
             content = cls.get_datasheet(cid)
-            mmap = PagesMemoryMap(cid, content)
-            cls.CHIP_TABLE[cid] = mmap
-            return mmap
+            chip = PagesMemoryMap(cid, content)
+            cls.CHIP_TABLE[cid] = chip
+            return chip
 
 
 class ElementProcessor():

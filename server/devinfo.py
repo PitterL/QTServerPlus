@@ -132,7 +132,7 @@ class Page(object):
     """
 
     def buffer_data_valid(self):
-        return len(self.__buffer) == self.length
+        return self.length and len(self.__buffer) == self.length
 
     def data_length(self):
         return len(self.__buffer)

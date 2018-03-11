@@ -701,6 +701,7 @@ class MessageContent(LayerBehavior, ActionEventWrapper, BoxLayout):
             #self.action = action
 
 class MessageView(LayerActionWrapper, FloatLayout):
+    NAME = 'w_msg'
     KeyEvent = {
         'ctrl_m': (109, ('ctrl',)),  # ctrl + d
         'esc': (27, None)}  # esc
@@ -708,7 +709,6 @@ class MessageView(LayerActionWrapper, FloatLayout):
     def __init__(self, **kwargs):
         super(MessageView, self).__init__(**kwargs)
         self.add_layer(MessageContent.NAME, MessageContent())
-        #self._hook_msg = MessageServer()
 
     @staticmethod
     def register_message_view():
@@ -718,6 +718,24 @@ class MessageView(LayerActionWrapper, FloatLayout):
             KeyboardShotcut.register_keyboard(watch, view, name)
 
         return view
+
+    @staticmethod
+    def _on_keyboard_down(root, inst, event):
+        if event == 'ctrl_m':
+            activated = inst not in root.children
+        elif event == 'esc':
+            activated = False
+        else:
+            return
+
+        if activated:
+            if inst not in root.children:
+                root.add_widget(inst)
+                return True
+        else:
+            if inst in root.children:
+                root.remove_widget(inst)
+                return False
 
     def create_repo_element(self, repo_insts):
         assert repo_insts
@@ -760,28 +778,18 @@ class MessageView(LayerActionWrapper, FloatLayout):
         if layer:
             layer.handle_data(data)
 
-    @staticmethod
-    def _on_keyboard_down(root, inst, event):
-        if event == 'ctrl_m':
-            activated = inst not in root.children
-        elif event == 'esc':
-            activated = False
-        else:
-            return
-
-        if activated:
-            if inst not in root.children:
-                root.add_widget(inst)
-                return True
-        else:
-            if inst in root.children:
-                root.remove_widget(inst)
-                return False
-
     def cast(self, **kwargs):
         disposal = ValueAction(**kwargs, time=time.time())
         print(self.__class__.__name__, "cast", disposal)
         self.disposal = disposal
+
+    def write(self, op, value):
+        action = PropAction(name=self.NAME, value=value, op=op, time=time.time())
+        print(self.__class__.__name__, "write", action)
+        self.action = action
+
+    def enable_irq(self):
+        self.write('irq', True)
 
 if __name__ == '__main__':
     import array, os

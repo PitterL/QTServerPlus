@@ -80,14 +80,14 @@ class LogicDevice(Mm):
 
         data_size = len(data['value'])  #current readout data size
         if data_size == 0 or data_size > cmd_size:  #something error
-            self.handle_nak_msg(seq, cmd, "data_size is invalid data_size {} cmd_size {}".format(data_size, cmd_size))
+            self.handle_nak_msg(seq, "data_size is invalid data_size {} cmd_size {}".format(data_size, cmd_size))
             return
 
         page = self.get_page(cmd_page_id)
         start = cmd_addr - page.addr()
         result = page.save_to_buffer(start, data['value'])
         if not result:
-            self.handle_nak_msg(seq, cmd, "save_to_buffer error start {} data {}".format(start, data['value']))
+            self.handle_nak_msg(seq, "save_to_buffer error start {} data {}".format(start, data['value']))
             return
 
         if data_size == cmd_size: # no data left
@@ -97,7 +97,7 @@ class LogicDevice(Mm):
                 self.prepare_message(message)
             else:   #failed
                 page.clear_buffer()
-                self.handle_nak_msg(seq, cmd)
+                self.handle_nak_msg(seq)
         else:
             command = ServerMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(seq),
                                     addr=cmd_addr + data_size, size=cmd_size - data_size, page_id=cmd_page_id)
@@ -116,14 +116,14 @@ class LogicDevice(Mm):
 
         data_size = data['value']
         if data_size == 0 or data_size > cmd_size:  #something error
-            self.handle_nak_msg(seq, cmd, "data_size is invalid data_size {} cmd_size {}".format(data_size, cmd_size))
+            self.handle_nak_msg(seq, "data_size is invalid data_size {} cmd_size {}".format(data_size, cmd_size))
             return
 
         page = self.get_page(cmd_page_id)
         start = cmd_addr - page.addr()
         result = page.save_to_buffer(start, cmd_value[:data_size])
         if not result:
-            self.handle_nak_msg(seq, cmd, "save_to_buffer error start {} data {}".format(start, data['value']))
+            self.handle_nak_msg(seq, "save_to_buffer error start {} data {}".format(start, data['value']))
             return
 
         if data_size == len(cmd_value):
@@ -148,7 +148,7 @@ class LogicDevice(Mm):
         self.prepare_message(message)
 
     def handle_nak_msg(self, seq, error=None):
-        print(self.__class__.__name__, "Send NAK message:", seq, error)
+        print(self.__class__.__name__, "handle NAK message:", seq, error)
         message = ServerMessage(Message.MSG_DEVICE_NAK, self.id(), seq, error=error)
         self.prepare_message(message)
 
@@ -282,6 +282,10 @@ class LogicDevice(Mm):
         command = ServerMessage(Message.CMD_DEVICE_RAW_DATA, self.id(), self.next_seq(seq), **kwargs)
         self.prepare_command(command)
 
+    def handle_device_poll_send(self, type, seq, kwargs):
+        command = ServerMessage(Message.CMD_POLL_DEVICE, self.id(), self.next_seq(seq), **kwargs)
+        self.prepare_command(command)
+
     def nak_command(self, seq):
         message = ServerMessage(Message.MSG_DEVICE_NAK, self.id(), seq)
         self.prepare_message(message)
@@ -298,6 +302,8 @@ class LogicDevice(Mm):
             self.handle_device_page_write(type, seq, msg.extra_info())
         elif type == Message.CMD_DEVICE_RAW_DATA:
             self.handle_device_raw_send(type, seq, msg.extra_info())
+        elif type == Message.CMD_POLL_DEVICE:
+            self.handle_device_poll_send(type, seq, msg.extra_info())
         else:
             ServerError("cmd {} not support".format(msg))
 
@@ -359,8 +365,8 @@ class QTouchserver(object):
         #logic pipe
         self.dispatch_msg(id, msg)
 
-    def handle_poll_device_cmd(self, id, seq):
-        self.devices[id].prepare_command(Message.CMD_POLL_DEVICE, seq)
+    # def handle_poll_device_cmd(self, id, seq):
+    #     self.devices[id].prepare_command(Message.CMD_POLL_DEVICE, seq)
 
     def dispatch_cmd(self, id, msg):
         if id in self.devices.keys():
@@ -374,10 +380,11 @@ class QTouchserver(object):
         #print("handle_ui_command")
 
         if id in self.devices.keys():
-            if type == Message.CMD_POLL_DEVICE:
-                self.handle_poll_device_cmd(id, seq)
-            else:
-                self.dispatch_cmd(id, msg)
+            # if type == Message.CMD_POLL_DEVICE:
+            #     self.handle_poll_device_cmd(id, seq)
+            # else:
+            #    self.dispatch_cmd(id, msg)
+            self.dispatch_cmd(id, msg)
         else:
             ServerError("cmd {} id {} not exist".format(msg, id))
 
@@ -405,7 +412,7 @@ class QTouchserver(object):
             for r in wait(all_pipes[:]):
                 #try:
                 msg = r.recv()
-                print("Process<{}> get: {}".format(self.__class__.__name__, msg))
+                #print("Process<{}> get: {}".format(self.__class__.__name__, msg))
 
                 location = msg.loc()
                 if location == Message.BUS or location == Message.DEVICE:

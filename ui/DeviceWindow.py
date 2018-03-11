@@ -44,11 +44,10 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
 
         self._keyboard = KeyboardShotcut(win=self)
         self._center = self.ids[DeviceWindow.CENTER_CONTENT_BAR]
-        self._center.bind(action=self.on_action)
+        self._center.bind(action=self.on_action)    #static widiget, need bind manual
         self._dbg_view = DebugView.register_debug_view()
         self._msg_view = MessageView.register_message_view()
         self._paint_view = PaintView.register_paint_view()
-
         self._hook_server = ConfigHookServer()
 
     def __str__(self):
@@ -139,6 +138,9 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
         if not self._msg_view:
             return
 
+        mmap = self.chip.get_msg_map_tab()
+        self._msg_view.set_repo_mmap_tab(mmap)
+
         report_table = self.chip.get_reg_reporer()
         for page_id, repo_range in sorted(report_table.items(), key=sort_key):
             major, minor = page_id
@@ -150,9 +152,6 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
                     if repo_mm:
                         repo_insts.append(repo_mm)
                 self._msg_view.create_repo_element(repo_insts)
-
-        mmap = self.chip.get_msg_map_tab()
-        self._msg_view.set_repo_mmap_tab(mmap)
 
     def create_chip_pages_element(self):
         def sort_key(mm):
@@ -222,6 +221,15 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
         #if widget:
             #print(self.__class__.__name__, "update", widget, page_cache.buf())
 
+    def poll_device(self):
+        command = UiMessage(Message.CMD_POLL_DEVICE, self.id(), self.next_seq())
+        self.prepare_command(command)
+
+    def raw_write(self, value):
+        kwargs = {'value': value}
+        command = UiMessage(Message.CMD_DEVICE_RAW_DATA, self.id(), self.next_seq(), **kwargs)
+        self.prepare_command(command)
+
     def page_write(self, page_id):
         page_mm = self.chip.get_mem_map_tab(page_id)
         if not page_mm:
@@ -247,6 +255,19 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
 
         page_id = instance.id()
         self.page_read(page_id)
+
+    def set_message_output(self, enable=True):
+        assert enable
+
+        page_id = (5, 0)
+        page_mm = self.chip.get_mem_map_tab(page_id)
+        if not page_mm:
+            return
+
+        len = page_mm.get_value_size() -1
+        addr = page_mm.address()
+        value = [0x88, 0x57, 0x2, page_mm.get_value_size() -1, addr & 0xff, addr >>8]
+        self.raw_write(value)
 
     def on_action(self, inst, act):
         print(self.__class__.__name__, inst, act)
@@ -276,7 +297,10 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
                     self.page_read(page_id, True)
 
         elif action.is_event('prop'):
-            pass
+            if action.is_name(MessageView.NAME):
+                if action.is_op('irq'):
+                    value = action.get('value')
+                    self.set_message_output(value)
 
     def handle_attach_msg(self, data):
         #self.prepare_command(Message(Message.CMD_POLL_DEVICE_DEVICE, self.id(), self.next_seq()))
@@ -293,7 +317,9 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
             self.chip = None
 
     def handle_page_read_msg(self, page_cache):
-        if not page_cache:
+        assert page_cache
+
+        if not page_cache.buffer_data_valid():
             return
 
         self.update_page_element(page_cache)
@@ -308,6 +334,7 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
             self.create_chip_pages_element()
             self.create_msg_view_element()
             self.create_paint_view_element()
+            self.set_message_output()
 
     def handle_page_write_msg(self, page):
         #self.ids["message"] == "Page write: {}".format(data)
@@ -330,6 +357,7 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
 
     def hand_nak_msg(self, msg):
         print(self.__class__.__name__, "NAK: ", msg)
+        self.poll_device()
 
     def handle_message(self, msg):
         type = msg.type()

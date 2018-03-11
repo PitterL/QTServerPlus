@@ -144,9 +144,9 @@ class Message(BaseMessage):
 
         return self.send_to(self.pipe)
 
-class DeviceMessage(Message):
+class HidMessage(Message):
     def __init__(self, *args, **kwargs):
-        super(DeviceMessage, self).__init__(Message.DEVICE, *args, **kwargs)
+        super(HidMessage, self).__init__(Message.DEVICE, *args, **kwargs)
 
 class BusMessage(Message):
     def __init__(self, *args, **kwargs):
