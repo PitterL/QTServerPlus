@@ -11,6 +11,7 @@ from server.message import Message, UiMessage, Token
 from server.devinfo import Page
 
 from tools.mem import ChipMemoryMap
+from tools.hook import ConfigHookServer, KeyboardShotcut
 #from ui.PageElement import PageContext, WidgetPageElement
 #from ui.PageElement import WidgetPageElement
 #from ui.PageControlBar import UpControlBar, DownControlBar, LeftControlBar, RightControlBar, CenterContentBar
@@ -18,8 +19,8 @@ from tools.mem import ChipMemoryMap
 
 from ui.DebugView import DebugView
 from ui.MessageView import MessageView
+from ui.PaintView import PaintView
 from ui.WidgetExt import Action, ActionEventWrapper
-from ui.WidgetExt import KeyboardShotcut
 
 class WinError(Exception):
     "Message error exception class type"
@@ -46,6 +47,9 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
         self._center.bind(action=self.on_action)
         self._dbg_view = DebugView.register_debug_view()
         self._msg_view = MessageView.register_message_view()
+        self._paint_view = PaintView.register_paint_view()
+
+        self._hook_server = ConfigHookServer()
 
     def __str__(self):
         return super(DeviceWindow, self).__str__() + '(' + self.id() + ')'
@@ -109,6 +113,18 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
             widget.bind(on_press=self.on_page_selected)
             return widget
 
+    def create_paint_view_element(self):
+        if not self._paint_view:
+            return
+
+        pids = ((9, 0), (100, 0))   #need T9/T100 range info to calculate pos
+        for page_id in pids:
+            page_mm = self.chip.get_mem_map_tab(page_id)
+            if page_mm:
+                self.page_read(page_id, True)
+                #self._paint_view.set_config(PaintView.EVENT_TOUCH, page_mm)
+                break
+
     def create_msg_view_element(self):
         def sort_key(repo):
             (major, minor), (st, end) = repo
@@ -119,6 +135,9 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
 
             # print("sort_key", result)
             return result
+
+        if not self._msg_view:
+            return
 
         report_table = self.chip.get_reg_reporer()
         for page_id, repo_range in sorted(report_table.items(), key=sort_key):
@@ -194,6 +213,8 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
             if w:
                 w.do_fresh(page_mm)
 
+            self._hook_server.handle(page_mm)
+
         #widget = self.get_element(page_id)
         # if not widget:
         #     widget = self.create_page_element(page_id)
@@ -201,18 +222,31 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
         #if widget:
             #print(self.__class__.__name__, "update", widget, page_cache.buf())
 
-    def on_page_selected(self, instance):
-        print(self.__class__.__name__, "on_page_selected", instance)
-
-        page_id = instance.id()
+    def page_write(self, page_id):
         page_mm = self.chip.get_mem_map_tab(page_id)
         if not page_mm:
             return
 
-        if not page_mm.valid():
+        value = page_mm.raw_values()
+        kwargs = {'page_id': page_id, 'value': value}
+        command = UiMessage(Message.CMD_DEVICE_PAGE_WRITE, self.id(), self.next_seq(), **kwargs)
+        self.prepare_command(command)
+
+    def page_read(self, page_id, discard=False):
+        page_mm = self.chip.get_mem_map_tab(page_id)
+        if not page_mm:
+            return
+
+        if discard or not page_mm.valid():
             kwargs = {'page_id': page_id, 'discard': True}
             command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
             self.prepare_command(command)
+
+    def on_page_selected(self, instance):
+        print(self.__class__.__name__, "on_page_selected", instance)
+
+        page_id = instance.id()
+        self.page_read(page_id)
 
     def on_action(self, inst, act):
         print(self.__class__.__name__, inst, act)
@@ -225,17 +259,22 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
                 page_id = self._center.get_current_page_id()
 
             if page_id:
-                page_mm = self.chip.get_mem_map_tab(page_id)
-                if page_mm:
-                    if action.is_op('w'):
-                        t = Message.CMD_DEVICE_PAGE_WRITE
-                        value = page_mm.raw_values()
-                        kwargs = {'page_id': page_id, 'value': value}
-                    else:
-                        t = Message.CMD_DEVICE_PAGE_READ
-                        kwargs = {'page_id': page_id}
-                    command = UiMessage(t, self.id(), self.next_seq(), **kwargs)
-                    self.prepare_command(command)
+                # page_mm = self.chip.get_mem_map_tab(page_id)
+                # if page_mm:
+                #     if action.is_op('w'):
+                #         t = Message.CMD_DEVICE_PAGE_WRITE
+                #         value = page_mm.raw_values()
+                #         kwargs = {'page_id': page_id, 'value': value}
+                #     else:
+                #         t = Message.CMD_DEVICE_PAGE_READ
+                #         kwargs = {'page_id': page_id, , 'discard': True}
+                #     command = UiMessage(t, self.id(), self.next_seq(), **kwargs)
+                #     self.prepare_command(command)
+                if action.is_op('w'):
+                    self.page_write(page_id)
+                else:
+                    self.page_read(page_id, True)
+
         elif action.is_event('prop'):
             pass
 
@@ -268,6 +307,7 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
         elif page_id == Page.OBJECT_TABLE:
             self.create_chip_pages_element()
             self.create_msg_view_element()
+            self.create_paint_view_element()
 
     def handle_page_write_msg(self, page):
         #self.ids["message"] == "Page write: {}".format(data)
@@ -329,10 +369,10 @@ if __name__ == '__main__':
 
     from MainUi import MainUi
     from server.devinfo import Page, MemMapStructure
-    from ui.WidgetExt import KeyboardShotcut
+    from tools.hook import KeyboardShotcut
 
     MainUi.load_ui_kv_file(os.curdir)
-    KeyboardShotcut()
+    #KeyboardShotcut()
 
     class DeviceWindowApp(App):
 
@@ -340,6 +380,72 @@ if __name__ == '__main__':
             super(DeviceWindowApp, self).__init__()
             if root_widget:
                 self.root = root_widget
+
+        def on_start(self):
+            root = self.root
+            KeyboardShotcut.keyboard_shortcut(root, 112, 19, 'p', ['ctrl'])
+
+            msg_data = [
+                array.array('B', [49, 148, 111, 2, 78, 1, 122, 0, 0, 0, 0]),
+                array.array('B', [49, 21, 97, 2, 54, 1, 78, 0, 0, 0, 0]),
+                array.array('B', [49, 148, 58, 2, 141, 1, 131, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 58, 2, 129, 1, 169, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 66, 2, 119, 1, 121, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 69, 2, 104, 1, 154, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 72, 2, 86, 1, 118, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 73, 2, 62, 1, 157, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 73, 2, 39, 1, 110, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 68, 2, 19, 1, 97, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 62, 2, 2, 1, 148, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 54, 2, 241, 0, 139, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 44, 2, 227, 0, 82, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 34, 2, 216, 0, 107, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 22, 2, 206, 0, 91, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 8, 2, 199, 0, 69, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 251, 1, 193, 0, 103, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 236, 1, 189, 0, 100, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 221, 1, 187, 0, 97, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 206, 1, 187, 0, 127, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 191, 1, 194, 0, 101, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 177, 1, 201, 0, 138, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 165, 1, 212, 0, 82, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 153, 1, 226, 0, 115, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 143, 1, 246, 0, 77, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 136, 1, 12, 1, 129, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 131, 1, 34, 1, 92, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 129, 1, 55, 1, 157, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 129, 1, 74, 1, 128, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 135, 1, 94, 1, 95, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 143, 1, 111, 1, 149, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 152, 1, 125, 1, 159, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 163, 1, 138, 1, 129, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 176, 1, 146, 1, 168, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 190, 1, 153, 1, 106, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 207, 1, 155, 1, 121, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 225, 1, 155, 1, 145, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 246, 1, 144, 1, 84, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 10, 2, 129, 1, 121, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 26, 2, 112, 1, 129, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 37, 2, 92, 1, 67, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 43, 2, 65, 1, 122, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 43, 2, 34, 1, 108, 0, 0, 0, 0]),
+                array.array('B', [49, 145, 32, 2, 6, 1, 77, 0, 0, 0, 0]),]
+                #array.array('B', [49, 21, 32, 2, 6, 1, 77, 0, 0, 0, 0]), ]
+
+            # report_list =  [
+            #                 Message('msg', Message.MSG_DEVICE_INTERRUPT_DATA, 'dev', root.next_seq(),
+            #                     value=array.array('B', [36, 16, 2, 2, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0,])),
+            #                 Message('msg', Message.MSG_DEVICE_INTERRUPT_DATA, 'dev', root.next_seq(),
+            #                     value=array.array('B', [50, 16, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ])),
+            #                 Message('msg', Message.MSG_DEVICE_INTERRUPT_DATA, 'dev', root.next_seq(),
+            #                     value=array.array('B', [49, 21, 230, 1, 40, 1, 129, 0, 0, 0])),
+            #                 Message('msg', Message.MSG_DEVICE_INTERRUPT_DATA, 'dev', root.next_seq(),
+            #                     value=array.array('B', [49, 145, 230, 1, 40, 1, 129, 0, 0, 0])),
+            #                 Message('msg', Message.MSG_DEVICE_INTERRUPT_DATA, 'dev', root.next_seq(),
+            #                     value=array.array('B', [12, 32, 26, 17, 53, 243, 179,1, 0, 0, 0]))]
+            for data in msg_data:
+                msg = Message('msg', Message.MSG_DEVICE_INTERRUPT_DATA, 'dev', root.next_seq(), value=data)
+                root.handle_message(msg)
 
     #1066T2
     #v_chip_id = array.array('B', [164, 24, 16, 170, 32, 20, 40])
@@ -416,20 +522,6 @@ if __name__ == '__main__':
 
     for cmd in cmd_list:
         root._msg_view.cast(**cmd)
-
-    report_list =  [
-                    # Message('msg', Message.MSG_DEVICE_INTERRUPT_DATA, 'dev', root.next_seq(),
-                    #     value=array.array('B', [36, 16, 2, 2, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0,])),
-                    # Message('msg', Message.MSG_DEVICE_INTERRUPT_DATA, 'dev', root.next_seq(),
-                    #     value=array.array('B', [50, 16, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ])),
-                    # Message('msg', Message.MSG_DEVICE_INTERRUPT_DATA, 'dev', root.next_seq(),
-                    #     value=array.array('B', [49, 21, 230, 1, 40, 1, 129, 0, 0, 0])),
-                    # Message('msg', Message.MSG_DEVICE_INTERRUPT_DATA, 'dev', root.next_seq(),
-                    #     value=array.array('B', [49, 145, 230, 1, 40, 1, 129, 0, 0, 0])),
-                    Message('msg', Message.MSG_DEVICE_INTERRUPT_DATA, 'dev', root.next_seq(),
-                        value=array.array('B', [12, 32, 26, 17, 53, 243, 179,1, 0, 0, 0]))]
-    for msg in report_list:
-        root.handle_message(msg)
 
 
     #start ui

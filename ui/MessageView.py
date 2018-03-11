@@ -15,10 +15,10 @@ from kivy.properties import ListProperty, StringProperty
 import kivy.utils as utils
 
 from tools.tree import mTree
-from tools.mem import PageElementMmap
+from tools.hook import MessageHookServer, KeyboardShotcut
+from tools.mem import PageElementMmap, ElementProcessor
 from ui.WidgetExt import Action, PropAction, ValueAction, LayerActionWrapper, LayerBoxLayout
 from ui.WidgetExt import LayerBehavior, ActionEvent,  ActionEventWrapper
-from ui.WidgetExt import KeyboardShotcut
 from ui.TableElement import WidgetPageLayout
 from ui.TableElement import WidgetPageContentRecycleElement
 from ui.TableElement import WidgetPageContentTitleElement, WidgetPageContentDataElement
@@ -286,15 +286,17 @@ class MessageTextLabel(LayerActionWrapper, CodeInput):
         text = ft_msg.output()
         if text:
             self._cached_text.append(text)
+            if len(self._cached_text) > self.max_msg_count():
+                self._cached_text.pop(0)    #FIXME: Any better method than pop?
 
     def render_end(self):
         if self._cached_text:
             self.text = '\n'.join(self._cached_text)
-            self._cached_text = []
+            #self._cached_text = []
 
 class MessageTextContent(ActionEventWrapper, ScrollView):
     NAME = 'Message'
-    class MsgContent(object):
+    class MessagePackage(object):
         def __init__(self, *args):
             major, minor, parent_inst, rid, color, data = args
             self.major = major
@@ -512,80 +514,6 @@ class MessageRegControlBar(MessageBaseControlBar):
                 else:
                     self.action = action
 
-class MessageProc():
-    COMBINE_WORDS = {'lsbits': 0, 'lsbyte': 0, 'msbyte': 1 }
-
-    def __init__(self):
-        self._data = {}
-        self._compound = {}
-
-    def save_compound_value(self, field_name, field, row_name, row_fields_num):
-        def get_name(words, name):
-            for word in words:  #word: 'Current X Position', name 'XPos' is match
-                w = word.lower().replace(' ', '')
-                n = name.lower().replace(' ', '')
-                if n in w or w in n:
-                    return word
-            return name
-
-        #compond value
-        result = field_name.rsplit(maxsplit=1)
-        if len(result) == 2:
-            main, suffix = result
-            tag = suffix.lower()
-            if tag in self.COMBINE_WORDS.keys():    #suffix in list
-                #if main not in self._compound:
-                name = get_name(self._compound.keys(), main)
-                if name not in self._compound.keys():
-                    self._compound[name] = []
-                k = self.COMBINE_WORDS[tag]
-                v = (row_name, field) #order as key
-                self._compound[name].append((k, v))
-                return True
-
-    def _process_compound(self):
-        for main, v in self._compound.items():
-            if not v:
-                continue
-
-            value = 0
-            ns = set()  #check whether row_name is same
-            for (_, data) in sorted(v, reverse=True):
-                row_name, field = data
-                value <<= field.width
-                value += field.value
-
-                result = row_name.rsplit(maxsplit=1)    #e.g. row name is 'XPOS 1'
-                if result[-1].isdigit():
-                    row_name = result[0]
-
-                ns.add(row_name)
-
-            if len(ns) < len(v):
-                name = ns.pop() #use row name
-            else:
-                name = main #if row name is not same, use main name
-
-            self._data[name] = value
-
-    def save_value(self, field_name, field, row_name, row_fields_num):
-        #normal value
-        if row_fields_num == 1:
-            name = row_name
-        else:
-            name = field_name
-        self._data[name] = field.value
-
-    #field_name, field, row_name, row_fields_num
-    def push(self, *args):
-        result = self.save_compound_value(*args)
-        if not result:
-            self.save_value(*args)
-
-    def output(self):
-        self._process_compound()
-        return self._data.copy()
-
 class MessageContent(LayerBehavior, ActionEventWrapper, BoxLayout):
     NAME = 'Content'
     def __init__(self, **kwargs):
@@ -604,6 +532,8 @@ class MessageContent(LayerBehavior, ActionEventWrapper, BoxLayout):
         self.repo_mmap = {}
         self.raw_data = []
         self.filter = dict(reg=dict(), rid=dict())
+        self._elemproc = ElementProcessor()
+        self._hook_server = MessageHookServer()
 
     def create_repo_element(self, repo_insts):
         for layer in self.get_layers():
@@ -655,56 +585,69 @@ class MessageContent(LayerBehavior, ActionEventWrapper, BoxLayout):
         size = msg_mm.get_value_size()
         msg_mm.set_values(data[1: size + 1])
 
-        major, minor = msg_mm.page_id()
-        parent_inst = msg_mm.parent_inst()
-        p = MessageProc()
+        self._hook_server.handle(msg_mm)
+        self._elemproc.clear()
         #print(self.__class__.__name__, "parse data", major, minor, data)
 
         # reg control bar is enabled
+        # branch = ('all', str(major))
+        # data = mTree.get_nested_leaf_value(self.filter, ('reg', branch))
+        # if data:
+        #     enabled, color = data
+        #     for i, row_elem in enumerate(msg_mm):
+        #         idx_name = row_elem.desc.name()
+        #         # rid row disable bit if off
+        #         if not mTree.get_leaf_value(
+        #                 self.filter, ('rid', rid, WidgetRowIndexElement.NAME, i, idx_name)):
+        #
+        #             for name, field in row_elem:
+        #                 # rid field disable bit is off
+        #                 if name.startswith(PageElementMmap.RowDesc.RSV_DATA_NAME):
+        #                     continue
+        #
+        #                 if not mTree.get_leaf_value(
+        #                         self.filter, ('rid', rid, WidgetRowDataElement.NAME, i, field.value)):
+        #                     p.push(name, field, idx_name, len(row_elem))
+
+
+        major, minor = msg_mm.page_id()
+        parent_inst = msg_mm.parent_inst()
         branch = ('all', str(major))
-        #print(self.__class__.__name__, self.filter)
-        data = mTree.get_nested_leaf_value(self.filter, ('reg', branch))
-        if data:
-            enabled, color = data
-            if not enabled:
-                return
-
-            for i, row_elem in enumerate(msg_mm):
-                idx_name = row_elem.desc.name()
-                # rid row disable bit if off
-                if not mTree.get_leaf_value(
-                        self.filter, ('rid', rid, WidgetRowIndexElement.NAME, i, idx_name)):
-
+        config = mTree.get_nested_leaf_value(self.filter, ('reg', branch))
+        if config:
+            enabled, color = config
+            if enabled:
+                for row_elem in msg_mm:
+                    row_name = row_elem.desc.name()
+                    # rid row disable bit if off
+                    row_fields_num = len(row_elem)
                     for name, field in row_elem:
                         # rid field disable bit is off
-                        if name.startswith(PageElementMmap.RowDesc.RSV_DATA_NAME):
-                            continue
+                        if not name.startswith(PageElementMmap.RowDesc.RSV_DATA_NAME) and \
+                            not mTree.get_leaf_value(
+                                self.filter, ('rid', rid, name)):
+                            self._elemproc.push(name, field, row_name, row_fields_num)
 
-                        if not mTree.get_leaf_value(
-                                self.filter, ('rid', rid, WidgetRowDataElement.NAME, i, field.value)):
-                            # if len(row_elem) > 1:
-                            #     msg_out[name] = field.value
-                            # else:
-                            #     msg_out[idx_name] = field.value
-                            # field_name, field, row_name, row_fields_num
-                            p.push(name, field, idx_name, len(row_elem))
+                msg_out = self._elemproc.output()
+                return MessageTextContent.MessagePackage(major, minor, parent_inst, rid, color, msg_out)
 
-        msg_out = p.output()
-        return MessageTextContent.MsgContent(major, minor, parent_inst, rid, color, msg_out)
-
-    def render(self):
+    def render(self, data):
         layer = self.get_layer(MessageTextContent.NAME)
         assert layer
 
-        for data in self.raw_data[-layer.max_msg_count():]:
-            msgc = self._parse_data(data)
-            if msgc:
-                layer.render(msgc)
+        # for data in self.raw_data[-layer.max_msg_count():]:
+        #     msgc = self._parse_data(data)
+        #     if msgc:
+        #         layer.render(msgc)
+        msgc = self._parse_data(data)
+        if msgc:
+            layer.render(msgc)
+
         layer.render_end()
 
     def handle_data(self, data):
         self._save_data(data)
-        self.render()
+        self.render(data)
 
     def set_reg_filter(self, kwargs):
         #reg_filter = self.filter['reg']
@@ -720,12 +663,13 @@ class MessageContent(LayerBehavior, ActionEventWrapper, BoxLayout):
 
         rid = kwargs.get('rid')
         zone = kwargs.get('zone')
-        row = kwargs.get('row')
+        #row = kwargs.get('row')
+        #col = kwargs.get('col')
         name = kwargs.get('name')
         value = kwargs.get('value')
-        col = kwargs.get('col')
 
-        mTree.build(self.filter, ('rid', rid, zone, row, name, value))
+        if zone == WidgetRowDataElement.NAME:
+            mTree.build(self.filter, ('rid', rid, name, value))
 
     def on_event_control_bar(self, event):
         name = event.get('name')
@@ -764,6 +708,7 @@ class MessageView(LayerActionWrapper, FloatLayout):
     def __init__(self, **kwargs):
         super(MessageView, self).__init__(**kwargs)
         self.add_layer(MessageContent.NAME, MessageContent())
+        #self._hook_msg = MessageServer()
 
     @staticmethod
     def register_message_view():
@@ -789,9 +734,28 @@ class MessageView(LayerActionWrapper, FloatLayout):
         if layer:
             layer.set_repo_mmap_tab(mmap)
 
+    def get_repo_mmap_tab(self, rid):
+        layer = self.get_layer(MessageContent.NAME)
+        if layer:
+            return layer.get_repo_mmap_tab(rid)
+
     def handle_data(self, data):
         assert(data)
 
+        #print(self.__class__.__name__, 'data', "array.{},".format(data))
+
+        # rid = data[0]
+        # msg_mm = self.get_repo_mmap_tab(rid)
+        # if msg_mm:
+        #     major, minor = msg_mm.page_id()
+        #     report_range = msg_mm.report_range()
+        #     self._hook_msg.handle(major, minor, rid, report_range, data)
+        #
+        #     layer = self.get_layer(MessageContent.NAME)
+        #     if layer:
+        #         layer.handle_data(data)
+        # else:
+        #     print(self.__class__.__name__, "Unknown data", data)
         layer = self.get_layer(MessageContent.NAME)
         if layer:
             layer.handle_data(data)

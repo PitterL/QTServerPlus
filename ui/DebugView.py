@@ -16,7 +16,7 @@ from kivy.properties import ObjectProperty, BooleanProperty, ListProperty, \
     ReferenceListProperty, AliasProperty, VariableListProperty
 from kivy.clock import Clock
 
-from ui.WidgetExt import KeyboardShotcut
+from tools.hook import KeyboardShotcut
 
 import re
 from functools import partial

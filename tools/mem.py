@@ -740,3 +740,82 @@ class ChipMemoryMap(object):
             mmap = PagesMemoryMap(cid, content)
             cls.CHIP_TABLE[cid] = mmap
             return mmap
+
+
+class ElementProcessor():
+    COMBINE_WORDS = {'lsbits': 0, 'lsbyte': 0, 'msbyte': 1 }
+
+    def __init__(self):
+        self._data = {}
+        self._compound = {}
+
+    def save_compound_value(self, field_name, field, row_name, row_fields_num):
+        def get_name(words, name):
+            for word in words:  #word: 'Current X Position', name 'XPos' is match
+                w = word.lower().replace(' ', '')
+                n = name.lower().replace(' ', '')
+                if n in w or w in n:
+                    return word
+            return name
+
+        #compond value
+        result = field_name.rsplit(maxsplit=1)
+        if len(result) == 2:
+            main, suffix = result
+            tag = suffix.lower()
+            if tag in self.COMBINE_WORDS.keys():    #suffix in list
+                #if main not in self._compound:
+                name = get_name(self._compound.keys(), main)
+                if name not in self._compound.keys():
+                    self._compound[name] = []
+                k = self.COMBINE_WORDS[tag]
+                v = (row_name, field) #order as key
+                self._compound[name].append((k, v))
+                return True
+
+    def _process_compound(self):
+        for main, v in self._compound.items():
+            if not v:
+                continue
+
+            value = 0
+            ns = set()  #check whether row_name is same
+            for (_, data) in sorted(v, reverse=True):
+                row_name, field = data
+                value <<= field.width
+                value += field.value
+
+                result = row_name.rsplit(maxsplit=1)    #e.g. row name is 'XPOS 1'
+                if result[-1].isdigit():
+                    row_name = result[0]
+
+                ns.add(row_name)
+
+            if len(ns) < len(v):
+                name = ns.pop() #use row name
+            else:
+                name = main #if row name is not same, use main name
+
+            self._data[name] = value
+
+    def save_value(self, field_name, field, row_name, row_fields_num):
+        #normal value
+        if row_fields_num == 1:
+            name = row_name
+        else:
+            name = field_name
+        self._data[name] = field.value
+
+    #field_name, field, row_name, row_fields_num
+    def push(self, *args):
+        result = self.save_compound_value(*args)
+        if not result:
+            self.save_value(*args)
+
+    def output(self):
+        self._process_compound()
+        return self._data
+
+    def clear(self):
+        self._data = {}
+        self._compound = {}
