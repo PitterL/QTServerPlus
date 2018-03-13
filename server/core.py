@@ -76,7 +76,7 @@ class LogicDevice(Mm):
         cmd_size = cmd_info['size'] # how many data is left
         cmd_page_id = cmd_info['page_id']
 
-        #print(self.__class__.__name__, "handle_page_read_msg", cmd, data)
+        print(self.__class__.__name__, "handle_page_read_msg", cmd, data)
 
         data_size = len(data['value'])  #current readout data size
         if data_size == 0 or data_size > cmd_size:  #something error
@@ -97,7 +97,7 @@ class LogicDevice(Mm):
                 self.prepare_message(message)
             else:   #failed
                 page.clear_buffer()
-                self.handle_nak_msg(seq)
+                self.handle_nak_msg(seq, "parse page failed {}".format(cmd_page_id))
         else:
             command = ServerMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(seq),
                                     addr=cmd_addr + data_size, size=cmd_size - data_size, page_id=cmd_page_id)
@@ -143,6 +143,10 @@ class LogicDevice(Mm):
         message = ServerMessage(Message.MSG_DEVICE_RAW_DATA, self.id(), seq, value=data['value'])
         self.prepare_message(message)
 
+    def handle_message_output_msg(self, seq, cmd, data):
+        message = ServerMessage(Message.MSG_DEVICE_MSG_OUTPUT, self.id(), seq, value=data['value'])
+        self.prepare_message(message)
+
     def handle_interrupt_data_msg(self, seq, data):
         message = ServerMessage(Message.MSG_DEVICE_INTERRUPT_DATA, self.id(), seq, value=data['value'])
         self.prepare_message(message)
@@ -181,6 +185,8 @@ class LogicDevice(Mm):
                     elif type == Message.CMD_DEVICE_PAGE_WRITE:
                         self.handle_page_write_msg(seq, cmd, msg.extra_info())
                     elif type == Message.CMD_DEVICE_RAW_DATA:
+                        self.handle_raw_data_msg(seq, cmd, msg.extra_info())
+                    elif type == Message.CMD_DEVICE_MSG_OUTPUT:
                         self.handle_raw_data_msg(seq, cmd, msg.extra_info())
                     elif type == Message.MSG_DEVICE_NAK:
                         self.handle_nak_msg(seq, error=msg)
@@ -282,9 +288,20 @@ class LogicDevice(Mm):
         command = ServerMessage(Message.CMD_DEVICE_RAW_DATA, self.id(), self.next_seq(seq), **kwargs)
         self.prepare_command(command)
 
-    def handle_device_poll_send(self, type, seq, kwargs):
+    def handle_device_poll(self, type, seq, kwargs):
         command = ServerMessage(Message.CMD_POLL_DEVICE, self.id(), self.next_seq(seq), **kwargs)
         self.prepare_command(command)
+
+    def handle_device_msg_output(self, type, seq, kwargs):
+        page_id = (5, 0)
+        if self.has_page(page_id):
+            page = self.get_page(page_id)
+            command = ServerMessage(Message.CMD_DEVICE_MSG_OUTPUT, self.id(), self.next_seq(seq),
+                                    addr = page.addr(), size = page.size() - 1)
+            self.prepare_command(command)
+        else:
+            ServerError("T5 is not ready for output")
+            self.nak_command(seq)
 
     def nak_command(self, seq):
         message = ServerMessage(Message.MSG_DEVICE_NAK, self.id(), seq)
@@ -303,7 +320,9 @@ class LogicDevice(Mm):
         elif type == Message.CMD_DEVICE_RAW_DATA:
             self.handle_device_raw_send(type, seq, msg.extra_info())
         elif type == Message.CMD_POLL_DEVICE:
-            self.handle_device_poll_send(type, seq, msg.extra_info())
+            self.handle_device_poll(type, seq, msg.extra_info())
+        elif type == Message.CMD_DEVICE_MSG_OUTPUT:
+            self.handle_device_msg_output(type, seq, msg.extra_info())
         else:
             ServerError("cmd {} not support".format(msg))
 

@@ -105,8 +105,9 @@ class WidgetPageElement(ActionEventWrapper, TabbedPanelItem):
     def do_fresh(self, page_mm=None):
         self._content.do_fresh(page_mm)
 
-    # def on_state(self, widget, value):
-    #     print(self.__class__.__name__, "state", value)
+    def on_state(self, widget, value):
+        #print(self.__class__.__name__, "state", value)
+        pass
 
     def on_action(self, inst, act):
         if inst is not self:

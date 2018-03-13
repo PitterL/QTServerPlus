@@ -17,7 +17,8 @@ class ActionEventButton(ActionButton):
     def set_action(self, dt):
         assert self.parent.property('action', True)
         action = ValueAction(op=self.get_op(), time=dt)
-        self.parent.action = action
+        if self.parent:
+            self.parent.action = action
 
     def on_state(self, inst, value):
         print(self.__class__.__name__, inst, value)
@@ -33,8 +34,10 @@ class ActionEventButton(ActionButton):
         # Clock.schedule_once(lambda dt: fn(dt))
 
 class ActionEventView(ActionEvent, ActionView):
-    def on_action(self, inst, action):
-        print(self.__class__.__name__, inst, action)
+    pass
+    # def on_action(self, inst, action):
+    #    print(self.__class__.__name__, inst, action)
+
 
 # class ActionEventView(ActionEvent, ActionView):
 #
@@ -68,7 +71,7 @@ class UpControlBar(ActionEventBar):
     def on_action(self, inst, act):
         if inst != self:
             action = Action.parse(act)
-            #self.action = dict(source=self.__class__.__name__, **action)
+            print(self.__class__.__name__, "on_action", inst, action)
             self.action =action.set(source=self.__class__.__name__)
 
 class DownControlBar(ActionEventBar):

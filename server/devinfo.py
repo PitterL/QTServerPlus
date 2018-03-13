@@ -209,6 +209,10 @@ class MemMapStructure(object):
             return self.__pages[key]
 
     def create_page(self, page_id, offset, length):
+        if length <= 0:
+            print(self.__class__.__name__, "create_page size zero", page_id)
+            return
+
         if page_id in self.__pages.keys():
             del self.__pages[page_id]
         self.__pages[page_id] = Page(page_id, offset, length)
@@ -252,6 +256,7 @@ class MemMapStructure(object):
     """
 
     def check_info_crc(self, page_list):
+        #FIXME: need achieve
         return True
 
     def page_parse(self, page_id):
@@ -267,12 +272,15 @@ class MemMapStructure(object):
 
         data = page.buf()
         if page_id == Page.ID_INFORMATION:
+            if not all(data):
+                print(self.__class__.__name__, 'Invalid data', page_id, data)
+                return
+
             id_infomation = IdInformation(*struct.unpack_from("B" * ctypes.sizeof(IdInformation), data))
             page.set_info(id_infomation)
             offset = page.addr() + page.size()
             length = id_infomation.object_num * ctypes.sizeof(ObjectTableElement)
-            self.create_page(Page.OBJECT_TABLE, offset, length)
-            return self.has_page(Page.OBJECT_TABLE)
+            return self.create_page(Page.OBJECT_TABLE, offset, length)
         elif page_id == Page.OBJECT_TABLE:
             page_list = {'id':self.get_page(Page.ID_INFORMATION),
                         'obj':self.get_page(Page.OBJECT_TABLE)}

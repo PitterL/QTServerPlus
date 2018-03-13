@@ -107,7 +107,7 @@ class ActionEventWrapper(ActionEvent):
     def clear_widgets(self, **kwargs):
         children = kwargs.get('children', self.children)
         for child in children:
-            self.action_unbind(child)
+            child.action_unbind(child)
             child.disposal_unbind(self)
 
         super(ActionEventWrapper, self).clear_widgets(**kwargs)

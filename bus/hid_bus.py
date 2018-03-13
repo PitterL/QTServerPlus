@@ -41,7 +41,7 @@ class HidCommand(Message):
     TAG     TAG2    TAG3
     0x4     0       0
     """
-    (CMD_TEST, CMD_WRITE_READ, CMD_RAW) = (0x80, 0x51, None)
+    (CMD_TEST, CMD_IRQ, CMD_WRITE_READ, CMD_RAW) = (0x80, (0x88, 0x58), 0x51,  None)
 
     TIMEOUT = 1 #second
     SIZE_MAX = {'r': 62, 'w': 59}
@@ -89,6 +89,11 @@ class HidCommand(Message):
             self.trans_size = trans_size
         elif type == HidCommand.CMD_RAW:
             value = kwargs['value']
+            self.trans_size = self.to_trans_size(len(value), 'w')
+            self.op = 'w'
+        elif type == HidCommand.CMD_IRQ:
+            addr_l, addr_h = kwargs['addr'].to_bytes(2, byteorder='little')
+            value = type + (2, kwargs['size'], addr_l, addr_h)
             self.trans_size = self.to_trans_size(len(value), 'w')
             self.op = 'w'
         else:
@@ -230,14 +235,14 @@ class Hid_Device(PhyDevice):
         self.report_in = None
         self.report_out = None
         self.hid_cmd = []   #only support 1 command depth by hardware
-        parent, client = Pipe(duplex=False)
-        self.pipe_hid_event = client
-        self.pipe_hid_recv = parent
+        # parent, client = Pipe(duplex=False)
+        # self.pipe_hid_event = client
+        # self.pipe_hid_recv = parent
 
-    def __del__(self):
-        print("<{}> del".format(self.__class__.__name__))
-        self.pipe_hid_event.close()
-        self.pipe_hid_recv.close()
+    # def __del__(self):
+    #     print("<{}> del".format(self.__class__.__name__))
+        # self.pipe_hid_event.close()
+        # self.pipe_hid_recv.close()
         #super(Hid_Device, self).__del__()
 
     def open_dev(self):
@@ -255,7 +260,7 @@ class Hid_Device(PhyDevice):
                 break
 
         self.phy.add_event_handler(self.USAGE_ID_INPUT,
-                                   self.hid_event_handler, usbhid.HID_EVT_ALL)  # level usage
+                                   self.phy_event_handler, usbhid.HID_EVT_ALL)  # level usage
         # except:
         #    print("Hid device open failed")
 
@@ -265,20 +270,8 @@ class Hid_Device(PhyDevice):
     def close_dev(self):
         self.phy.close()
 
-    def hid_event_handler(self, raw_data, event_type):  #this may be a asyn thread/process, need lock report pipe
-        "simple usage control handler"
-
-        #print("HID PHY EVENT:", event_type, raw_data)
-        PhyMessage(PhyMessage.MSG_HID_RAW_DATA, self.id(), Message.seq_root(), event=event_type, value=array.array('B', raw_data),
-                   pipe=self.pipe_hid_event).send()
-
-
-    def hid_simulated_event(self, raw_data, event_type):
-        PhyMessage(PhyMessage.MSG_HID_SIMULATED, self.id(), Message.seq_root(), event=event_type, value=raw_data,
-                   pipe=self.pipe_hid_event).send()
-
-    def handle_hid_test_message(self, cmd, msg):
-        print(self.__class__.__name__, "handle_hid_test_message", msg)
+    def handle_phy_test_message(self, cmd, msg):
+        print(self.__class__.__name__, "handle_phy_test_message", msg)
         seq = cmd.seq()  # to parent seq
         seq.pop()
 
@@ -289,11 +282,9 @@ class Hid_Device(PhyDevice):
         address = value[1]
         if tag == cmd_data[1] and address == cmd_data[2]:
             return HidMessage(Message.MSG_DEVICE_CONNECTED, self.id(), seq, value=address,
-                    pipe=self.logic_pipe()).send()
+                    pipe=self.logic_pipe())
 
-        return False
-
-    def handle_hid_rw_message(self, cmd, msg):
+    def handle_phy_rw_message(self, cmd, msg):
         #print("handle_hid_read_message")
         type = cmd.parent_type()
         seq = cmd.seq()  # to parent seq
@@ -306,22 +297,29 @@ class Hid_Device(PhyDevice):
         if op == 'r' and cmd_data[2]:
             size = value[0]  # size at index 0
             return HidMessage(type, self.id(), seq, value=value[1: size + 1],
-                    pipe=self.logic_pipe()).send()
+                    pipe=self.logic_pipe())
         elif op == 'w':
             size = cmd.transfered_size() - value[0]
             return HidMessage(type, self.id(), seq, value=size,
-                    pipe=self.logic_pipe()).send()
+                    pipe=self.logic_pipe())
 
-        return False
-
-    def handle_hid_raw_message(self, cmd, msg):
+    def handle_phy_raw_message(self, cmd, msg):
         type = cmd.parent_type()
         seq = cmd.seq()  # to parent seq
         seq.pop()
 
         value = msg.value()
         return HidMessage(type, self.id(), seq, value=value,
-                      pipe=self.logic_pipe()).send()
+                      pipe=self.logic_pipe())
+
+    def handle_phy_ouput_message(self, cmd, msg):
+        type = cmd.parent_type()
+        seq = cmd.seq()  # to parent seq
+        seq.pop()
+
+        value = msg.value()
+        return HidMessage(type, self.id(), seq, value=value,
+                      pipe=self.logic_pipe())
 
     def handle_phy_interrupt_message(self, msg):
         type = Message.MSG_DEVICE_INTERRUPT_DATA
@@ -335,7 +333,7 @@ class Hid_Device(PhyDevice):
         else:
             print(self.__class__.__name__, "Invalid irq message:", value)
 
-    def handle_hid_nak_message(self, cmd):
+    def handle_phy_nak_message(self, cmd):
         seq = cmd.seq()  # to parent seq
         seq.pop()
         HidMessage(Message.MSG_DEVICE_NAK, self.id(), seq, pipe=self.logic_pipe()).send()
@@ -349,15 +347,21 @@ class Hid_Device(PhyDevice):
                 print(self.__class__.__name__, "cmd:", cmd)
                 print(self.__class__.__name__, "msg:", msg)
 
-                self.hid_cmd.pop(i)
                 if cmd.type() == HidCommand.CMD_TEST:
-                    result = self.handle_hid_test_message(cmd, msg)
+                    result = self.handle_phy_test_message(cmd, msg)
                 elif cmd.type() == HidCommand.CMD_WRITE_READ:
-                    result = self.handle_hid_rw_message(cmd, msg)
+                    result = self.handle_phy_rw_message(cmd, msg)
                 elif cmd.type() == HidCommand.CMD_RAW:
-                    result = self.handle_hid_raw_message(cmd, msg)
+                    result = self.handle_phy_raw_message(cmd, msg)
+                elif cmd.type() == HidCommand.CMD_IRQ:
+                    result = self.handle_phy_ouput_message(cmd, msg)
                 else:
-                    result = False
+                    print(self.__class__.__name__, "Unhandled cmd message", cmd, msg)
+
+                if result:
+                    self.hid_cmd.pop(i)
+                    result.send()
+
                 break
 
             elif cmd.is_status(Message.ERROR): # PhyMessage.MSG_HID_SIMULATED
@@ -371,17 +375,27 @@ class Hid_Device(PhyDevice):
                 cmd.reset_repeat(Message.REPEAT)
                 self.hid_cmd.append(cmd)
         else:
-            if result is not None:
-                print(self.__class__.__name__, "Unknow hid device message: {}".format(msg))
-                self.handle_hid_nak_message(cmd)
-            else:
+            if result is None:
                 self.handle_phy_interrupt_message(msg)
+            else:
+                print(self.__class__.__name__, "Unknow phy msg:", msg)
+                self.handle_phy_nak_message(cmd)
+
+
+    def phy_event_handler(self, raw_data, event_type):  # this may be a asyn thread/process, need lock report pipe
+        "simple usage control handler"
+
+        # print("HID PHY EVENT:", event_type, raw_data)
+        msg = PhyMessage(PhyMessage.MSG_HID_RAW_DATA, self.id(), Message.seq_root(), event=event_type,
+                         value=array.array('B', raw_data))
+
+        self.handle_phy_message(msg)
 
     def hid_proc_poll_command(self, type, seq, extra_info):
         "Test command 1"
 
         command = HidCommand(HidCommand.CMD_TEST, self.next_seq(seq),
-                         value=0xca, repeat=extra_info.get('repeat'), parent_type=type,
+                         value=0xca, parent_type=type, **extra_info,
                          pipe=self.report_out, usage=Hid_Device.USAGE_ID_OUTPUT)
 
         self.prepare_command(command)
@@ -404,6 +418,12 @@ class Hid_Device(PhyDevice):
                          pipe=self.report_out, usage=Hid_Device.USAGE_ID_OUTPUT)
         self.prepare_command(cmd)
 
+    def hid_proc_msg_output_command(self, type, seq, data):
+        cmd = HidCommand(HidCommand.CMD_IRQ, self.next_seq(seq),
+                         addr=data['addr'], size=data['size'], parent_type=type,
+                         pipe=self.report_out, usage=Hid_Device.USAGE_ID_OUTPUT)
+        self.prepare_command(cmd)
+
     def prepare_command(self, command):
         if len(self.hid_cmd) >= Hid_Device.CMD_STACK_DEPTH:
             print("Hid has command in list: {}".format(self.hid_cmd))
@@ -414,18 +434,15 @@ class Hid_Device(PhyDevice):
         self.hid_cmd.append(command)
 
     def handle_timeout_command(self):
-        for i, cmd in enumerate(self.hid_cmd):
+        for cmd in self.hid_cmd[:]:
             if cmd.is_status(Message.SEND):
                 if cmd.timeout(Hid_Device.CMD_TIMEOUT):
                     print("HID command timeout: {}".format(cmd))
-                    self.hid_cmd.pop(i)
-                    self.handle_hid_nak_message(cmd)
+                    self.hid_cmd.remove(cmd)
+                    self.handle_phy_nak_message(cmd)
 
     def send_command(self):
         #print("{} send command (has {} cmd in list)".format(self.__class__.__name__, len(self.hid_cmd)))
-        error = any(map(lambda c: c.is_status(Message.ERROR), self.hid_cmd))
-        if error:
-            self.hid_simulated_event(None, self.HID_EVENT_SIMULATED_ID)
 
         pending = any(map(lambda c: c.is_status(Message.SEND), self.hid_cmd))
         if pending:
@@ -449,6 +466,8 @@ class Hid_Device(PhyDevice):
             self.hid_proc_block_write_command(type, seq, extra_info)
         elif type == Message.CMD_DEVICE_RAW_DATA:
             self.hid_proc_raw_data_command(type, seq, extra_info)
+        elif type == Message.CMD_DEVICE_MSG_OUTPUT:
+            self.hid_proc_msg_output_command(type, seq, extra_info)
         else:
             print("Unknown message type {}".format(type))
 
@@ -476,7 +495,7 @@ class Hid_Device(PhyDevice):
         # try:
         self.open_dev()
 
-        all_pipes = [self.logic_pipe(), self.pipe_hid_recv]
+        all_pipes = [self.logic_pipe()]
         close_handle = False
         while not close_handle:
             #try:
@@ -488,19 +507,20 @@ class Hid_Device(PhyDevice):
                         print("Process EOF: {}".format(self.__class__.__name__))
                         close_handle = True
                         self.close_dev()
-                        self.pipe_hid_event.close()
-                        self.pipe_hid_recv.close()
+                        # self.pipe_hid_event.close()
+                        # self.pipe_hid_recv.close()
                         return
 
                     #print("Process<{}> get: {}".format(self.__class__.__name__, msg))
 
-                    location = msg.loc()
-                    if location == PhyMessage.HID_DEVICE:
-                        self.handle_phy_message(msg)
-                    elif location == PhyMessage.SERVER:
-                        self.handle_bus_command(msg)
-                    else:
-                        pass
+                    self.handle_bus_command(msg)
+                    # location = msg.loc()
+                    # if location == PhyMessage.HID_DEVICE:
+                    #     #self.handle_phy_message(msg)
+                    # elif location == PhyMessage.SERVER:
+                    #     self.handle_bus_command(msg)
+                    # else:
+                    #     pass
 
             self.send_command()
             self.handle_timeout_command()

@@ -30,6 +30,7 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
     CMD_STACK_DEPTH = 10
     (UP_CONTROL_BAR, DOWN_CONTROL_BAR, LEFT_CONTROL_BAR, right_CONTROL_BAR, CENTER_CONTENT_BAR) = ("up", 'down', 'left', 'right', 'center')
     DEFAULT_MESSAGE_SIZE = 11
+    CMD_TIMEOUT = 3
 
     def __init__(self, id, *args, **kwargs):
         self.__id = id
@@ -45,6 +46,9 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
         self._keyboard = KeyboardShotcut(win=self)
         self._center = self.ids[DeviceWindow.CENTER_CONTENT_BAR]
         self._center.bind(action=self.on_action)    #static widiget, need bind manual
+        self._up = self.ids[DeviceWindow.UP_CONTROL_BAR]
+        self._up.bind(action=self.on_action)
+
         self._dbg_view = DebugView.register_debug_view()
         self._msg_view = MessageView.register_message_view()
         self._paint_view = PaintView.register_paint_view()
@@ -71,6 +75,14 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
         #print(self.__class__.__name__, msg, self.cmd_list)
         self.cmd_list.append(msg)
 
+    def handle_timeout_command(self):
+        for cmd in self.cmd_list[:]:
+            if cmd.is_status(Message.SEND):
+                if cmd.timeout(self.CMD_TIMEOUT):
+                    print(self.__class__.__name__, "command timeout: {}".format(cmd))
+                    self.cmd_list.remove(cmd)
+                    self.hand_nak_msg(cmd)
+
     def prepare_debug_command(self):
         if self._dbg_view:
             value = self._dbg_view.pop_data()
@@ -89,6 +101,7 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
                 self.cmd_list[0].send_to(pipe)
 
     def process_command(self, pipe):
+        self.handle_timeout_command()
         self.prepare_debug_command()
         self.send_command_to(pipe)
 
@@ -109,7 +122,7 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
         page_mm = self.chip.get_mem_map_tab(page_id)
         if page_mm:
             widget = self._center.create_page_element(page_mm)
-            widget.bind(on_press=self.on_page_selected)
+            widget.bind(on_release=self.on_page_selected)
             return widget
 
     def create_paint_view_element(self):
@@ -221,9 +234,6 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
         #if widget:
             #print(self.__class__.__name__, "update", widget, page_cache.buf())
 
-    def poll_device(self):
-        command = UiMessage(Message.CMD_POLL_DEVICE, self.id(), self.next_seq())
-        self.prepare_command(command)
 
     def raw_write(self, value):
         kwargs = {'value': value}
@@ -250,24 +260,31 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
             command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
             self.prepare_command(command)
 
+    def poll_device(self):
+        command = UiMessage(Message.CMD_POLL_DEVICE, self.id(), self.next_seq())
+        self.prepare_command(command)
+
+    def set_message_output(self, enable=True):
+        assert enable
+
+        # page_id = (5, 0)
+        # page_mm = self.chip.get_mem_map_tab(page_id)
+        # if not page_mm:
+        #     return
+
+        # len = page_mm.get_value_size() -1
+        # addr = page_mm.address()
+        # value = [0x88, 0x57, 0x2, page_mm.get_value_size() -1, addr & 0xff, addr >>8]
+        # self.raw_write(value)
+
+        command = UiMessage(Message.CMD_DEVICE_MSG_OUTPUT, self.id(), self.next_seq())
+        self.prepare_command(command)
+
     def on_page_selected(self, instance):
         print(self.__class__.__name__, "on_page_selected", instance)
 
         page_id = instance.id()
         self.page_read(page_id)
-
-    def set_message_output(self, enable=True):
-        assert enable
-
-        page_id = (5, 0)
-        page_mm = self.chip.get_mem_map_tab(page_id)
-        if not page_mm:
-            return
-
-        len = page_mm.get_value_size() -1
-        addr = page_mm.address()
-        value = [0x88, 0x57, 0x2, page_mm.get_value_size() -1, addr & 0xff, addr >>8]
-        self.raw_write(value)
 
     def on_action(self, inst, act):
         print(self.__class__.__name__, inst, act)
@@ -310,9 +327,15 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
         print("{} connect {}".format(self.__class__.__name__, attached))
 
         if attached:
-            kwargs = {'page_id': Page.ID_INFORMATION, 'discard': False}
-            command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
-            self.prepare_command(command)
+            if not self.chip:
+                kwargs = {'page_id': Page.ID_INFORMATION, 'discard': False}
+                command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
+                self.prepare_command(command)
+            elif not self.chip.inited():
+                ChipMemoryMap.delete(self.chip.id())
+                self.chip = None
+            else:
+                self.set_message_output()
         else:
             self.chip = None
 
@@ -326,19 +349,24 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
 
         page_id = page_cache.id()
         if page_id == Page.ID_INFORMATION:
-            self.create_chip(page_cache)
-            kwargs = {'page_id': Page.OBJECT_TABLE, 'discard': False}
-            command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
-            self.prepare_command(command)
+            if not self.chip:
+                self.create_chip(page_cache)
+                kwargs = {'page_id': Page.OBJECT_TABLE, 'discard': False}
+                command = UiMessage(Message.CMD_DEVICE_PAGE_READ, self.id(), self.next_seq(), **kwargs)
+                self.prepare_command(command)
         elif page_id == Page.OBJECT_TABLE:
-            self.create_chip_pages_element()
-            self.create_msg_view_element()
-            self.create_paint_view_element()
-            self.set_message_output()
+            if not self.chip.inited():
+                self.create_chip_pages_element()
+                self.create_msg_view_element()
+                self.create_paint_view_element()
+                self.set_message_output()
+
+        self.set_message_output()
 
     def handle_page_write_msg(self, page):
         #self.ids["message"] == "Page write: {}".format(data)
         print(self.__class__.__name__, "page write done", page.id())
+        self.set_message_output()
 
     def handle_dbg_msg(self, data):
         if self._dbg_view:
@@ -346,6 +374,9 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
 
     def handle_raw_data_msg(self, data):
         self.handle_dbg_msg(data)
+
+    def handle_message_output_msg(self, data):
+        pass
 
     def handle_interrupt_data_msg(self, data):
         if not self.chip:
@@ -376,6 +407,8 @@ class DeviceWindow(ActionEventWrapper, RelativeLayout):
             self.handle_page_write_msg(val)
         elif type == Message.MSG_DEVICE_RAW_DATA:
             self.handle_raw_data_msg(val)
+        elif type == Message.MSG_DEVICE_MSG_OUTPUT:
+            self.handle_message_output_msg(val)
         elif type == Message.MSG_DEVICE_INTERRUPT_DATA:
             self.handle_interrupt_data_msg(val)
         elif type == Message.MSG_DEVICE_NAK:

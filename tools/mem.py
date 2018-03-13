@@ -507,6 +507,7 @@ class PagesMemoryMap(object):
         self.mem_map = OrderedDict()
         self.msg_map = dict()
         self._doc = product_doc #Fixme: product doc has some bugs of splitted rows
+        self._chip_id = chip_id
 
         #build page 0 memory map table
         mmem = Page0Mem(chip_id)
@@ -518,6 +519,11 @@ class PagesMemoryMap(object):
             addr = mmem.get_value_size() #Page0 size if Page1 offset
             mmem = Page1Mem(addr, object_num)
             self.set_mem_map(mmem)
+        else:
+            print(self.__class__.__name__, "Invalid chip info", chip_id)
+
+    def id(self):
+        return self._chip_id
 
     def inited(self):
         return len(self.mem_map) > 2 #has get object table
@@ -741,11 +747,17 @@ class ChipMemoryMap(object):
         if cid in cls.CHIP_TABLE.keys():
             return cls.CHIP_TABLE[cid]
         else:
-            content = cls.get_datasheet(cid)
-            chip = PagesMemoryMap(cid, content)
-            cls.CHIP_TABLE[cid] = chip
-            return chip
+            if all(cid):
+                content = cls.get_datasheet(cid)
+                chip = PagesMemoryMap(cid, content)
+                cls.CHIP_TABLE[cid] = chip
+                return chip
 
+    @classmethod
+    def delete(cls, chip_id):
+        cid = tuple(chip_id)
+        if cid in cls.CHIP_TABLE.keys():
+            del cls.CHIP_TABLE[cid]
 
 class ElementProcessor():
     COMBINE_WORDS = {'lsbits': 0, 'lsbyte': 0, 'msbyte': 1 }

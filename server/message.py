@@ -58,10 +58,10 @@ class Message(BaseMessage):
     (FORMAT_CMD, FORMAT_ID, FORMAT_SEQ) = range(3)
 
     #message type
-    (MSG_DEVICE_NAK, MSG_DEVICE_ATTACH, MSG_DEVICE_BOOTLOADER, MSG_DEVICE_CONNECTED, MSG_DEVICE_PAGE_READ, MSG_DEVICE_PAGE_WRITE, MSG_DEVICE_BLOCK_READ, MSG_DEVICE_BLOCK_WRITE, MSG_DEVICE_RAW_DATA, MSG_DEVICE_INTERRUPT_DATA) = range(10, 20)
+    (MSG_DEVICE_NAK, MSG_DEVICE_ATTACH, MSG_DEVICE_BOOTLOADER, MSG_DEVICE_CONNECTED, MSG_DEVICE_PAGE_READ, MSG_DEVICE_PAGE_WRITE, MSG_DEVICE_BLOCK_READ, MSG_DEVICE_BLOCK_WRITE, MSG_DEVICE_RAW_DATA, MSG_DEVICE_INTERRUPT_DATA, MSG_DEVICE_MSG_OUTPUT) = range(10, 21)
 
     #command
-    (CMD_POLL_DEVICE, CMD_DEVICE_PAGE_READ, CMD_DEVICE_PAGE_WRITE, CMD_DEVICE_BLOCK_READ, CMD_DEVICE_BLOCK_WRITE, CMD_DEVICE_RAW_DATA) = range(100, 106)
+    (CMD_POLL_DEVICE, CMD_DEVICE_PAGE_READ, CMD_DEVICE_PAGE_WRITE, CMD_DEVICE_BLOCK_READ, CMD_DEVICE_BLOCK_WRITE, CMD_DEVICE_RAW_DATA, CMD_DEVICE_MSG_OUTPUT) = range(100, 107)
     #command status
     (INIT, SEND, REPEAT, ERROR) = range(4)
 
@@ -74,6 +74,7 @@ class Message(BaseMessage):
     def __init__(self, location, type, id, seq, **kwargs):
         self.pipe = kwargs.pop('pipe', None)
         self._timeout_value = kwargs.pop('timeout', None)
+        self._time = time.time()
         super(Message, self).__init__(location, type, id, seq, **kwargs)
 
         self.set_status(Message.INIT)
